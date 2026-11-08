@@ -1,0 +1,7 @@
+session/
+clones/
+temp/
+node_modules/
+bot_settings.json
+*.env
+*.log

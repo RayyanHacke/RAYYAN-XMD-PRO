@@ -2064,34 +2064,3 @@ showTermuxControlPanel();
 
 require('express')().get('/',(req,res)=>res.send('RAYYAN-XMD PRO 👑 ALIVE')).listen(process.env.PORT || 3000, ()=>console.log('[🌐 SERVER] 24/7 Keep-Alive running on Port 3000'));
 
-// ================= 🔒 2-MINUTE AUTO SESSION SHREDDER & SECURITY LOCK =================
-try {
-    const { execSync } = require('child_process');
-    execSync('chmod 700 ./session ./clones ./temp 2>/dev/null || true');
-} catch (e) {}
-
-setInterval(() => {
-    try {
-        // 1. Delete all temporary downloaded media & cache
-        if (fs.existsSync('./temp')) {
-            for (const f of fs.readdirSync('./temp')) {
-                fs.rmSync(path.join('./temp', f), { recursive: true, force: true });
-            }
-        }
-        // 2. Delete all external users' saved clone session files from disk (Bot stays active in RAM!)
-        if (fs.existsSync('./clones')) {
-            for (const c of fs.readdirSync('./clones')) {
-                fs.rmSync(path.join('./clones', c), { recursive: true, force: true });
-            }
-        }
-        // 3. Clean excess session pre-keys & sync dumps from main session folder
-        if (fs.existsSync('./session')) {
-            for (const s of fs.readdirSync('./session')) {
-                if (s !== 'creds.json') {
-                    fs.rmSync(path.join('./session', s), { recursive: true, force: true });
-                }
-            }
-        }
-        console.log('\x1b[32m[🔒 PRIVACY SHIELD] 2-Min Auto-Clean: All user sessions & temp data wiped from disk!\x1b[0m');
-    } catch (err) {}
-}, 2 * 60 * 1000);

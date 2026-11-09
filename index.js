@@ -2064,3 +2064,89 @@ showTermuxControlPanel();
 
 require('express')().get('/',(req,res)=>res.send('RAYYAN-XMD PRO 👑 ALIVE')).listen(process.env.PORT || 3000, ()=>console.log('[🌐 SERVER] 24/7 Keep-Alive running on Port 3000'));
 
+
+// === YT CLOUD API BYPASS START ===
+async function downloadFromYtApis(ytUrl, outPath, isMp3) {
+    const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
+    const saveBuffer = async (dlUrl) => {
+        if (!dlUrl || !dlUrl.startsWith('http')) return false;
+        const res = await axios.get(dlUrl, {
+            responseType: 'arraybuffer',
+            timeout: 60000,
+            maxContentLength: 100 * 1024 * 1024,
+            headers: { 'User-Agent': ua }
+        });
+        if (res.data && res.data.byteLength > 15000) {
+            fs.writeFileSync(outPath, Buffer.from(res.data));
+            return true;
+        }
+        return false;
+    };
+
+    // 1. OceanSaver / Loader.to Cloud Proxy Engine (Works on all Bot-Hosting IPs)
+    try {
+        const fmt = isMp3 ? 'mp3' : '720';
+        const init = await axios.get(
+            `https://p.oceansaver.in/ajax/download.php?format=${fmt}&url=${encodeURIComponent(ytUrl)}&api=dfcb6d76f2f6a9894gjkege8a4ab232222`,
+            { headers: { 'User-Agent': ua }, timeout: 15000 }
+        );
+        if (init.data && init.data.id) {
+            for (let i = 0; i < 20; i++) {
+                await new Promise((r) => setTimeout(r, 1500));
+                const prog = await axios.get(
+                    `https://p.oceansaver.in/ajax/progress.php?id=${init.data.id}`,
+                    { headers: { 'User-Agent': ua }, timeout: 10000 }
+                );
+                if (prog.data?.download_url) {
+                    if (await saveBuffer(prog.data.download_url)) return true;
+                    break;
+                }
+            }
+        }
+    } catch (e) {}
+
+    // 2. Multi-Server Direct REST APIs Fallback
+    const apiList = isMp3
+        ? [
+              async () => (await axios.get(`https://api.vreden.my.id/api/ytmp3?url=${encodeURIComponent(ytUrl)}`, { timeout: 20000 })).data?.result?.download?.url,
+              async () => (await axios.get(`https://api.siputzx.my.id/api/d/ytmp3?url=${encodeURIComponent(ytUrl)}`, { timeout: 20000 })).data?.data?.dl,
+              async () => (await axios.get(`https://api.ryzendesu.vip/api/downloader/ytmp3?url=${encodeURIComponent(ytUrl)}`, { timeout: 20000 })).data?.url,
+              async () => (await axios.get(`https://api.giftedtech.my.id/api/download/dlmp3?apikey=gifted&url=${encodeURIComponent(ytUrl)}`, { timeout: 20000 })).data?.result?.download_url
+          ]
+        : [
+              async () => (await axios.get(`https://api.vreden.my.id/api/ytmp4?url=${encodeURIComponent(ytUrl)}`, { timeout: 20000 })).data?.result?.download?.url,
+              async () => (await axios.get(`https://api.siputzx.my.id/api/d/ytmp4?url=${encodeURIComponent(ytUrl)}`, { timeout: 20000 })).data?.data?.dl,
+              async () => (await axios.get(`https://api.ryzendesu.vip/api/downloader/ytmp4?url=${encodeURIComponent(ytUrl)}`, { timeout: 20000 })).data?.url,
+              async () => (await axios.get(`https://api.giftedtech.my.id/api/download/dlmp4?apikey=gifted&url=${encodeURIComponent(ytUrl)}`, { timeout: 20000 })).data?.result?.download_url
+          ];
+
+    for (const getLink of apiList) {
+        try {
+            const dlUrl = await getLink();
+            if (await saveBuffer(dlUrl)) return true;
+        } catch (e) {}
+    }
+    return false;
+}
+
+function execPromise(cmd) {
+    return new Promise(async (resolve, reject) => {
+        if (cmd.includes('yt-dlp') && (cmd.includes('song_') || cmd.includes('vid_'))) {
+            const outMatch = cmd.match(/-o\s+"([^"]+)"/);
+            const urlMatches = cmd.match(/"(https?:\/\/[^"]+)"/g);
+            if (outMatch && urlMatches && urlMatches.length > 0) {
+                const outPath = outMatch[1];
+                const ytUrl = urlMatches[urlMatches.length - 1].replace(/"/g, '');
+                const isMp3 = outPath.endsWith('.mp3') || cmd.includes('--audio-format mp3');
+                console.log(`[⚡ YT CLOUD BYPASS] Downloading ${isMp3 ? 'MP3' : 'MP4'} via Proxy APIs: ${ytUrl}`);
+                const ok = await downloadFromYtApis(ytUrl, outPath, isMp3);
+                if (ok) return resolve('Downloaded via Cloud API');
+            }
+        }
+        exec(cmd, (error, stdout, stderr) => {
+            if (error) reject(error);
+            else resolve(stdout || stderr);
+        });
+    });
+}
+// === YT CLOUD API BYPASS END ===

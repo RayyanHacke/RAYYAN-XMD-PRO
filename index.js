@@ -2150,3 +2150,45 @@ function execPromise(cmd) {
     });
 }
 // === YT CLOUD API BYPASS END ===
+
+// === TG 8-MIN AUTO PING START ===
+let lastKnownTgChatId = '';
+setInterval(async () => {
+    try {
+        const token = CONFIG.tgToken || process.env.TG_TOKEN || '';
+        let chatId = CONFIG.tgChatId || process.env.TG_CHAT_ID || lastKnownTgChatId;
+        if (!token) return;
+
+        // Auto-detect Chat ID if user sent /start on Telegram
+        if (!chatId && tgUserStates && tgUserStates.size > 0) {
+            chatId = Array.from(tgUserStates.keys())[0];
+        }
+        if (!chatId) return;
+        lastKnownTgChatId = chatId;
+
+        // 1. Send .ping & wake up local Express server every 8 minutes
+        axios.get('http://127.0.0.1:' + (process.env.PORT || 3000)).catch(() => {});
+        const res = await axios.post(`https://api.telegram.org/bot${token}/sendMessage`, {
+            chat_id: chatId,
+            text: `⚡ *.ping* — *${CONFIG.botName} KEEP-ALIVE*\n🟢 *Status:* Active & Awake\n⏱️ *Uptime:* ${formatUptime(process.uptime())}\n🗑️ _Auto-deleting in 2 minutes..._`,
+            parse_mode: 'Markdown'
+        });
+
+        const msgId = res.data?.result?.message_id;
+        console.log(`\x1b[35m[✈️ TG AUTO-PING]\x1b[0m Sent .ping to Telegram (Msg ID: ${msgId}). Will delete in 2 mins.`);
+
+        // 2. Auto-delete that exact message after 2 minutes so chat & memory stay clean!
+        if (msgId) {
+            setTimeout(async () => {
+                try {
+                    await axios.post(`https://api.telegram.org/bot${token}/deleteMessage`, {
+                        chat_id: chatId,
+                        message_id: msgId
+                    });
+                    console.log(`\x1b[32m[🗑️ TG CLEANER]\x1b[0m Deleted .ping message (${msgId}) after 2 minutes!`);
+                } catch (e) {}
+            }, 2 * 60 * 1000);
+        }
+    } catch (err) {}
+}, 8 * 60 * 1000);
+// === TG 8-MIN AUTO PING END ===

@@ -2062,7 +2062,7 @@ process.on('unhandledRejection', (err) => {
 // Launch Termux Interactive Button Control Panel on Startup
 showTermuxControlPanel();
 
-require('express')().get('/',(req,res)=>res.send('RAYYAN-XMD PRO 👑 ALIVE')).listen(process.env.PORT || 3000, ()=>console.log('[🌐 SERVER] 24/7 Keep-Alive running on Port 3000'));
+// Moved to Web Portal
 
 
 // === YT CLOUD API BYPASS START ===
@@ -2192,3 +2192,505 @@ setInterval(async () => {
     } catch (err) {}
 }, 8 * 60 * 1000);
 // === TG 8-MIN AUTO PING END ===
+
+// === RAYYAN WEB PORTAL START ===
+try {
+    const express = require('express');
+    const webApp = express();
+    const WEB_PORT = process.env.PORT || 3000;
+
+    webApp.use(express.json());
+    webApp.use(express.urlencoded({ extended: true }));
+
+    // API: Live Bot Status
+    webApp.get('/api/status', (req, res) => {
+        res.json({
+            botName: CONFIG.botName,
+            version: CONFIG.version,
+            owner: CONFIG.ownerName,
+            uptime: formatUptime(process.uptime()),
+            status: 'ONLINE 24/7'
+        });
+    });
+
+    // API: Generate 8-Digit Pairing Code Directly on Website
+    webApp.get('/api/pair', async (req, res) => {
+        const rawNum = req.query.number || '';
+        const cleanNum = rawNum.replace(/[^0-9]/g, '');
+
+        if (cleanNum.length < 10 || cleanNum.length > 15) {
+            return res.status(400).json({
+                ok: false,
+                error: 'Sahi country code ke sath number likhein! (Example: 923329553169)'
+            });
+        }
+
+        try {
+            const pairDir = path.join(CONFIG.clonesDir, `web_${cleanNum}`);
+            // Clear any old incomplete session so code generates fresh every time
+            if (fs.existsSync(pairDir)) {
+                fs.rmSync(pairDir, { recursive: true, force: true });
+            }
+
+            let responded = false;
+            const timeoutId = setTimeout(() => {
+                if (!responded) {
+                    responded = true;
+                    res.json({
+                        ok: false,
+                        error: 'WhatsApp server busy hai. 10 second baad dobara button dabayein!'
+                    });
+                }
+            }, 18000);
+
+            // Hook into startRayyanBot so the paired user gets the FULL bot with all commands!
+            const webHookSock = {
+                sendMessage: async (jid, payload) => {
+                    if (responded) return;
+                    const txt = payload?.text || '';
+                    const match =
+                        txt.match(/\*([A-Z0-9]{4}-[A-Z0-9]{4})\*/) ||
+                        txt.match(/([A-Z0-9]{4}-[A-Z0-9]{4})/) ||
+                        txt.match(/\*([A-Z0-9]{8})\*/);
+
+                    if (match && match[1]) {
+                        responded = true;
+                        clearTimeout(timeoutId);
+                        return res.json({ ok: true, code: match[1], number: cleanNum });
+                    }
+                }
+            };
+
+            await startRayyanBot(pairDir, true, 'web_portal', webHookSock, cleanNum);
+        } catch (err) {
+            return res.status(500).json({ ok: false, error: err.message });
+        }
+    });
+
+    // Main Website HTML (Cyber-Neon Dark Theme + Full Branding)
+    webApp.get('/', (req, res) => {
+        const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>${CONFIG.botName} • Official Web Pairing Portal</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #050811;
+            --card: rgba(14, 21, 38, 0.85);
+            --cyan: #00f2fe;
+            --blue: #4facfe;
+            --gold: #ffcc00;
+            --pink: #ff0844;
+            --green: #00e676;
+            --text: #ffffff;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: radial-gradient(circle at top, #101d3b 0%, #050811 70%);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 20px 15px 50px;
+            overflow-x: hidden;
+        }
+        .container {
+            max-width: 540px;
+            margin: 0 auto;
+        }
+        /* Top Badge */
+        .pk-badge {
+            display: inline-block;
+            background: rgba(0, 230, 118, 0.15);
+            border: 1px solid var(--green);
+            color: var(--green);
+            font-size: 12px;
+            font-weight: 600;
+            padding: 5px 14px;
+            border-radius: 50px;
+            margin-bottom: 14px;
+            letter-spacing: 0.5px;
+        }
+        .hero {
+            text-align: center;
+            padding: 25px 20px;
+            background: var(--card);
+            border: 1px solid rgba(0, 242, 254, 0.25);
+            border-radius: 24px;
+            box-shadow: 0 0 35px rgba(0, 242, 254, 0.12);
+            backdrop-filter: blur(12px);
+            margin-bottom: 22px;
+        }
+        .logo-ring {
+            width: 96px;
+            height: 96px;
+            margin: 0 auto 14px;
+            border-radius: 50%;
+            padding: 4px;
+            background: linear-gradient(135deg, var(--cyan), var(--gold), var(--pink));
+            box-shadow: 0 0 25px rgba(0, 242, 254, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .logo-inner {
+            width: 100%;
+            height: 100%;
+            background: #080d1a;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 42px;
+        }
+        h1 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 26px;
+            font-weight: 900;
+            background: linear-gradient(90deg, var(--cyan), var(--gold));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: 1px;
+            margin-bottom: 6px;
+        }
+        .dev-tag {
+            font-size: 14px;
+            color: #b0c4de;
+            margin-bottom: 16px;
+        }
+        .dev-tag span {
+            color: var(--gold);
+            font-weight: 700;
+        }
+        .stats-bar {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 18px;
+        }
+        .stat-pill {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            padding: 6px 13px;
+            border-radius: 12px;
+            font-size: 12px;
+            color: #d1e0f0;
+        }
+        .stat-pill b { color: var(--cyan); }
+        .social-btns {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        .btn-social {
+            text-decoration: none;
+            padding: 11px 12px;
+            border-radius: 14px;
+            font-size: 13px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .btn-social:active { transform: scale(0.97); }
+        .btn-yt {
+            background: linear-gradient(135deg, #ff0844, #ff4b2b);
+            color: #fff;
+            box-shadow: 0 4px 18px rgba(255, 8, 68, 0.35);
+        }
+        .btn-wa {
+            background: linear-gradient(135deg, #00b09b, #96c93d);
+            color: #fff;
+            box-shadow: 0 4px 18px rgba(0, 230, 118, 0.3);
+        }
+
+        /* Pairing Card */
+        .pair-card {
+            background: var(--card);
+            border: 1px solid rgba(255, 204, 0, 0.35);
+            border-radius: 24px;
+            padding: 24px 20px;
+            box-shadow: 0 0 30px rgba(255, 204, 0, 0.1);
+            margin-bottom: 22px;
+        }
+        .pair-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 17px;
+            color: var(--gold);
+            text-align: center;
+            margin-bottom: 6px;
+        }
+        .pair-sub {
+            text-align: center;
+            font-size: 13px;
+            color: #9ab0c7;
+            margin-bottom: 18px;
+        }
+        .input-group {
+            position: relative;
+            margin-bottom: 14px;
+        }
+        .input-group input {
+            width: 100%;
+            padding: 15px 16px;
+            border-radius: 14px;
+            border: 1.5px solid rgba(0, 242, 254, 0.4);
+            background: #091022;
+            color: #fff;
+            font-size: 16px;
+            font-weight: 600;
+            outline: none;
+            text-align: center;
+            letter-spacing: 1px;
+        }
+        .input-group input:focus {
+            border-color: var(--gold);
+            box-shadow: 0 0 15px rgba(255, 204, 0, 0.3);
+        }
+        .btn-pair {
+            width: 100%;
+            padding: 15px;
+            border: none;
+            border-radius: 14px;
+            background: linear-gradient(90deg, var(--cyan), var(--blue));
+            color: #040814;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 15px;
+            font-weight: 900;
+            cursor: pointer;
+            box-shadow: 0 6px 22px rgba(0, 242, 254, 0.4);
+            transition: all 0.2s;
+        }
+        .btn-pair:hover { opacity: 0.95; }
+        .btn-pair:disabled { opacity: 0.6; cursor: wait; }
+
+        /* Code Result Box */
+        #resultBox {
+            display: none;
+            margin-top: 18px;
+            padding: 18px;
+            border-radius: 16px;
+            background: rgba(0, 242, 254, 0.08);
+            border: 1.5px dashed var(--cyan);
+            text-align: center;
+        }
+        .code-display {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 28px;
+            font-weight: 900;
+            color: var(--gold);
+            letter-spacing: 4px;
+            margin: 10px 0 14px;
+            text-shadow: 0 0 15px rgba(255, 204, 0, 0.5);
+        }
+        .btn-copy {
+            background: var(--gold);
+            color: #000;
+            border: none;
+            padding: 9px 22px;
+            border-radius: 10px;
+            font-weight: 700;
+            font-size: 13px;
+            cursor: pointer;
+        }
+        .steps-box {
+            margin-top: 14px;
+            text-align: left;
+            font-size: 12.5px;
+            color: #c2d4e8;
+            line-height: 1.7;
+            background: rgba(0,0,0,0.35);
+            padding: 12px 14px;
+            border-radius: 12px;
+        }
+
+        /* Features Grid */
+        .sec-head {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 15px;
+            text-align: center;
+            color: var(--cyan);
+            margin-bottom: 14px;
+            letter-spacing: 1px;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+        .f-card {
+            background: var(--card);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            padding: 14px;
+        }
+        .f-card h3 {
+            font-size: 13.5px;
+            color: var(--gold);
+            margin-bottom: 4px;
+        }
+        .f-card p {
+            font-size: 11.5px;
+            color: #9ab0c7;
+            line-height: 1.4;
+        }
+        .footer {
+            text-align: center;
+            font-size: 12px;
+            color: #6c8299;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="hero">
+            <div class="pk-badge">🇵🇰 NO VPN REQUIRED IN PAKISTAN • DIRECT CONNECT</div>
+            <div class="logo-ring">
+                <div class="logo-inner">👑</div>
+            </div>
+            <h1>${CONFIG.botName}</h1>
+            <div class="dev-tag">Developed by <span>${CONFIG.ownerName}</span> (@silladon29)</div>
+
+            <div class="stats-bar">
+                <div class="stat-pill">🟢 Status: <b>ONLINE 24/7</b></div>
+                <div class="stat-pill">⚡ Version: <b>${CONFIG.version}</b></div>
+                <div class="stat-pill">⏱️ Uptime: <b id="upTxt">${formatUptime(process.uptime())}</b></div>
+            </div>
+
+            <div class="social-btns">
+                <a href="${CONFIG.YOUTUBE}" target="_blank" class="btn-social btn-yt">📺 YOUTUBE CHANNEL</a>
+                <a href="https://wa.me/${CONFIG.ownerNumber}?text=Assalamu%20Alaikum%20Rayyan%20Bhai!%20Main%20RAYYAN-XMD%20PRO%20Website%20se%20aaya%20hoon" target="_blank" class="btn-social btn-wa">💬 WHATSAPP OWNER</a>
+            </div>
+        </div>
+
+        <div class="pair-card">
+            <div class="pair-title">🔗 LINK YOUR WHATSAPP BOT</div>
+            <div class="pair-sub">Apna WhatsApp number country code ke sath likhein (Bina + ke)</div>
+
+            <div class="input-group">
+                <input type="tel" id="waNum" placeholder="923329553169" maxlength="15" />
+            </div>
+            <button class="btn-pair" id="pairBtn" onclick="getPairCode()">⚡ GET 8-DIGIT PAIRING CODE</button>
+
+            <div id="resultBox">
+                <div id="statusMsg" style="font-size:13px; color:#00f2fe;">⏳ Connecting to WhatsApp Server...</div>
+                <div class="code-display" id="codeText">----</div>
+                <button class="btn-copy" id="copyBtn" style="display:none;" onclick="copyCode()">📋 COPY PAIRING CODE</button>
+                <div class="steps-box">
+                    <b>📌 WhatsApp Connect Karne Ka Tariqa:</b><br/>
+                    1️⃣ Apna WhatsApp kholein aur <b>Linked Devices</b> mein jayein.<br/>
+                    2️⃣ <b>Link a Device</b> par tap karein.<br/>
+                    3️⃣ Neeche <b>Link with phone number instead</b> par click karein.<br/>
+                    4️⃣ Upar diya gaya <b>8-Digit Code</b> lagayein — Bot foran active ho jayega!
+                </div>
+            </div>
+        </div>
+
+        <div class="sec-head">🔥 VIP FEATURES INCLUDED</div>
+        <div class="grid">
+            <div class="f-card">
+                <h3>❤️ Secret View-Once</h3>
+                <p>View-Once photo ya video par ❤️ react karein aur wo seedha aapke Personal DM mein save ho jayegi!</p>
+            </div>
+            <div class="f-card">
+                <h3>🤯 Crazy .edit Spoof</h3>
+                <p>Dost ke message ko hijack karein ya .magic se live badalte huye messages bhejein!</p>
+            </div>
+            <div class="f-card">
+                <h3>🎵 YT & TikTok Cloud</h3>
+                <p>.play aur .tt se bina watermark ke songs aur videos super-fast download karein.</p>
+            </div>
+            <div class="f-card">
+                <h3>🤖 Real AI & Imagine</h3>
+                <p>.ai se har sawal ka jawab lein aur .imagine se HD AI photos banayein!</p>
+            </div>
+            <div class="f-card">
+                <h3>🛡️ Anti-Delete Guard</h3>
+                <p>Koi bhi message ya photo delete karega to bot foran wapas recover kar dega!</p>
+            </div>
+            <div class="f-card">
+                <h3>🎮 10 Chat Games</h3>
+                <p>Tic-Tac-Toe, Quiz, Riddle, Math, Slot aur Truth/Dare doston ke sath khelein!</p>
+            </div>
+        </div>
+
+        <div class="footer">
+            © 2026 <b>${CONFIG.botName}</b> • Powered by <b>${CONFIG.ownerName}</b>
+        </div>
+    </div>
+
+    <script>
+        let currentCode = '';
+        async function getPairCode() {
+            const input = document.getElementById('waNum').value.replace(/[^0-9]/g, '');
+            const btn = document.getElementById('pairBtn');
+            const box = document.getElementById('resultBox');
+            const statusMsg = document.getElementById('statusMsg');
+            const codeText = document.getElementById('codeText');
+            const copyBtn = document.getElementById('copyBtn');
+
+            if (input.length < 10) {
+                alert('Please enter a valid WhatsApp number with country code! (e.g. 923329553169)');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerText = '⏳ GENERATING CODE (WAIT 4s)...';
+            box.style.display = 'block';
+            copyBtn.style.display = 'none';
+            statusMsg.style.color = '#00f2fe';
+            statusMsg.innerText = '⏳ Generating 8-Digit Pairing Code for +' + input + '...';
+            codeText.innerText = '••••-••••';
+
+            try {
+                const res = await fetch('/api/pair?number=' + input);
+                const data = await res.json();
+                if (data.ok && data.code) {
+                    currentCode = data.code;
+                    statusMsg.style.color = '#00e676';
+                    statusMsg.innerText = '✅ YOUR 8-DIGIT PAIRING CODE IS READY:';
+                    codeText.innerText = data.code;
+                    copyBtn.style.display = 'inline-block';
+                } else {
+                    statusMsg.style.color = '#ff0844';
+                    statusMsg.innerText = '❌ ' + (data.error || 'Failed to generate code. Try again!');
+                    codeText.innerText = 'ERROR';
+                }
+            } catch (e) {
+                statusMsg.style.color = '#ff0844';
+                statusMsg.innerText = '❌ Server connection error. Try again!';
+                codeText.innerText = 'ERROR';
+            } finally {
+                btn.disabled = false;
+                btn.innerText = '⚡ GET 8-DIGIT PAIRING CODE';
+            }
+        }
+
+        function copyCode() {
+            if (!currentCode) return;
+            navigator.clipboard.writeText(currentCode.replace(/-/g, ''));
+            const copyBtn = document.getElementById('copyBtn');
+            copyBtn.innerText = '✅ COPIED TO CLIPBOARD!';
+            setTimeout(() => { copyBtn.innerText = '📋 COPY PAIRING CODE'; }, 2000);
+        }
+    </script>
+</body>
+</html>`;
+        res.setHeader('Content-Type', 'text/html');
+        res.send(html);
+    });
+
+    webApp.listen(WEB_PORT, () => {
+        console.log(`\x1b[32m[🌐 WEBSITE LIVE] ${CONFIG.botName} Web Pairing Portal running on http://localhost:${WEB_PORT}\x1b[0m`);
+    });
+} catch (err) {
+    console.error('Web Portal Error:', err.message);
+}
+// === RAYYAN WEB PORTAL END ===

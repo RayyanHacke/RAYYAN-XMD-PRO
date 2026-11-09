@@ -40,6 +40,10 @@ console.error = (...args) => { if (!isSignalNoise(args)) origErr.apply(console, 
 console.warn = (...args) => { if (!isSignalNoise(args)) origWarn.apply(console, args); };
 
 // ================= CONFIGURATION & SAVED SETTINGS =================
+const WEB_PORT = Number(process.env.PORT || process.env.SERVER_PORT || 3000);
+const APP_HOST = process.env.HOST || '0.0.0.0';
+const PUBLIC_APP_URL = process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || '';
+
 const SETTINGS_FILE = './bot_settings.json';
 const CONFIG = {
     botName: 'RAYYAN-XMD PRO',
@@ -204,14 +208,13 @@ function execPromise(cmd) {
     });
 }
 
-// ================= 🔥 12-SERVER YOUTUBE CLOUD PROXY ENGINE (NO YT-DLP NEEDED!) =================
+// ================= 12-SERVER YOUTUBE CLOUD PROXY ENGINE =================
 function extractYtId(url) {
     if (!url) return null;
     const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|v\/|shorts\/|live\/))([a-zA-Z0-9_-]{11})/);
     return match ? match[1] : null;
 }
 
-// Smart Resolver: Converts song names, channel links (@silladon29), or Shorts into a clean Video Object
 async function resolveYouTubeTarget(queryOrUrl) {
     const raw = (queryOrUrl || '').trim();
     const directId = extractYtId(raw);
@@ -238,7 +241,6 @@ async function resolveYouTubeTarget(queryOrUrl) {
         };
     }
 
-    // If user passed a channel link like https://youtube.com/@silladon29 or normal search text
     let searchQuery = raw;
     if (raw.includes('youtube.com/@')) {
         const handle = raw.split('youtube.com/@')[1].split(/[/?&]/)[0];
@@ -274,7 +276,6 @@ async function downloadYouTubeCloudBuffer(videoUrl, videoId, isMp3 = true) {
                 headers: { 'User-Agent': ua, Referer: 'https://www.youtube.com/' }
             });
             const cType = String(res.headers?.['content-type'] || '').toLowerCase();
-            // Reject HTML error pages masquerading as media
             if (cType.includes('text/html') || cType.includes('application/json')) return null;
             if (res.data && res.data.byteLength > 25000) {
                 return Buffer.from(res.data);
@@ -283,7 +284,6 @@ async function downloadYouTubeCloudBuffer(videoUrl, videoId, isMp3 = true) {
         return null;
     };
 
-    // ENGINE 1: OceanSaver / Loader.to Cloud Downloader (Works on all Datacenter IPs)
     try {
         const fmt = isMp3 ? 'mp3' : '720';
         const init = await axios.get(
@@ -306,7 +306,6 @@ async function downloadYouTubeCloudBuffer(videoUrl, videoId, isMp3 = true) {
         }
     } catch (e) {}
 
-    // ENGINE 2: Multi-Server Direct REST Cloud APIs (10 Independent Proxy Servers)
     const apiEndpoints = isMp3
         ? [
               `https://api.siputzx.my.id/api/d/ytmp3?url=${q}`,
@@ -365,7 +364,6 @@ async function downloadYouTubeCloudBuffer(videoUrl, videoId, isMp3 = true) {
         } catch (e) {}
     }
 
-    // ENGINE 3: Piped & Invidious Decentralized Proxy Streams (Zero IP Block!)
     if (videoId) {
         const pipedInstances = [
             `https://pipedapi.kavin.rocks/streams/${videoId}`,
@@ -490,7 +488,9 @@ async function triggerTelegramAutoPing() {
     const targetChat = CONFIG.tgChatId || activeTgChatId;
     if (!CONFIG.tgToken || !targetChat) return;
     try {
-        axios.get('http://127.0.0.1:' + (process.env.PORT || 3000)).catch(() => {});
+        if (PUBLIC_APP_URL) {
+            axios.get(PUBLIC_APP_URL).catch(() => {});
+        }
 
         const res = await axios.post(`https://api.telegram.org/bot${CONFIG.tgToken}/sendMessage`, {
             chat_id: targetChat,
@@ -1001,7 +1001,6 @@ async function startRayyanBot(
                         break;
                     }
 
-                    // ================= 🔥 100% CLOUD PROXY YOUTUBE MP3 (.play) — NO YT-DLP! =================
                     case 'play':
                     case 'song':
                     case 'ytmp3': {
@@ -1043,7 +1042,6 @@ async function startRayyanBot(
                         break;
                     }
 
-                    // ================= 🔥 100% CLOUD PROXY YOUTUBE MP4 (.yt) — NO YT-DLP! =================
                     case 'yt':
                     case 'ytmp4':
                     case 'video': {
@@ -1531,7 +1529,6 @@ function showTermuxControlPanel() {
 try {
     const express = require('express');
     const webApp = express();
-    const WEB_PORT = process.env.PORT || 3000;
 
     webApp.use(express.json());
     webApp.use(express.urlencoded({ extended: true }));
@@ -1691,7 +1688,7 @@ try {
             statusMsg.style.color = '#00f2fe'; statusMsg.innerText = '⏳ Generating 8-Digit Pairing Code for +' + input + '...';
             codeText.innerText = '••••-••••';
             try {
-                const res = await fetch('/api/pair?number=' + input);
+                const res = await fetch('/api/pair?number=' + encodeURIComponent(input));
                 const data = await res.json();
                 if (data.ok && data.code) {
                     currentCode = data.code;
@@ -1727,8 +1724,8 @@ try {
         res.send(html);
     });
 
-    webApp.listen(WEB_PORT, () => {
-        console.log(`\x1b[32m[🌐 WEBSITE LIVE] ${CONFIG.botName} Web Pairing Portal running on Port ${WEB_PORT}\x1b[0m`);
+    webApp.listen(WEB_PORT, APP_HOST, () => {
+        console.log(`\x1b[32m[🌐 WEBSITE LIVE] ${CONFIG.botName} Web Pairing Portal running on ${APP_HOST}:${WEB_PORT}\x1b[0m`);
     });
 } catch (err) {
     console.error('Web Portal Error:', err.message);

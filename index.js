@@ -1,3 +1,4 @@
+global.liveWaSockets = global.liveWaSockets || new Map();
 const {
     default: makeWASocket,
     useMultiFileAuthState,
@@ -61,6 +62,9 @@ const CONFIG = {
     antiDelete: true,
     autoStatus: true,
     heartViewOnce: true,
+    autoReact: true,
+    autoReactAll: true,
+    reactEmoji: "",
     tgToken: process.env.TG_TOKEN || '',
     tgChatId: process.env.TG_CHAT_ID || ''
 };
@@ -981,6 +985,7 @@ async function startRayyanBot(
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect } = update;
         if (connection === 'close') {
+            global.liveWaSockets.delete(customSessionDir);
             global.activeBotSessions.set(resolvedSessionDir, "CLOSED");
             isOnlineReady = false;
             const statusCode = lastDisconnect?.error instanceof Boom ? lastDisconnect.error.output.statusCode : 0;
@@ -996,6 +1001,7 @@ async function startRayyanBot(
             }
             setTimeout(() => {
                 isOnlineReady = true;
+                global.liveWaSockets.set(customSessionDir, sock);
                 global.activeBotSessions.set(resolvedSessionDir, "ONLINE");
                 console.log(`\x1b[32m[✓] ${CONFIG.botName} WhatsApp Session Connected!\x1b[0m`);
             }, 2000);
@@ -1080,6 +1086,15 @@ async function startRayyanBot(
                 continue;
             }
 
+            // ⚡ AUTOMATIC MULTI-BOT REACTION ON POSTS
+            if (CONFIG.autoReact && !body.startsWith(CONFIG.prefix)) {
+                const senderClean = (m.key.participant || m.key.remoteJid || "").split("@")[0].split(":")[0];
+                const isOwnerPost = m.key.fromMe || senderClean === CONFIG.ownerNumber;
+                if (isOwnerPost || CONFIG.autoReactAll) {
+                    triggerMultiBotReaction(sock, remoteJid, m.key, CONFIG.reactEmoji);
+                }
+            }
+
             if (!body.startsWith(CONFIG.prefix)) {
                 if (!m.key.fromMe && CONFIG.autoReply) {
                     const lower = body.toLowerCase();
@@ -1126,9 +1141,12 @@ async function startRayyanBot(
 ╚══════════════════════╝
 ➤ *REACT ❤️*  (Save ViewOnce to DM)
 ➤ *.VV* / *.VV2*  (Unlock ViewOnce)
-➤ *.PLAY*  <song name or link>
+➤ *.REACT*  <on/off/emoji/reply>
+➤ *.PLAY*  <full song name/link>
 ➤ *.YT*  <youtube video or name>
-➤ *.TT*  <tiktok link>
+➤ *.SNAPCHAT*  (Random Snap Video)
+➤ *.INSTAGRAM*  (Random IG Reel)
+➤ *.TIKTOK*  (Random TikTok Video)
 ➤ *.MEDIAFIRE*  <link>
 ➤ *.PP*  (Save HD Profile Pic)
 ➤ *.STICKER*  (Image to Sticker)
@@ -1157,6 +1175,120 @@ async function startRayyanBot(
                         break;
                     }
 
+                                        case 'react':
+                    case 'autoreact': {
+                        const sub = text.trim().toLowerCase();
+                        const contextInfo = msg?.extendedTextMessage?.contextInfo;
+
+                        // If replying to a message, blast reactions from ALL connected bots on that message!
+                        if (contextInfo?.stanzaId) {
+                            const targetKey = {
+                                remoteJid,
+                                fromMe: contextInfo.participant ? contextInfo.participant.includes(getMyPersonalJid().split("@")[0]) : false,
+                                id: contextInfo.stanzaId,
+                                participant: isGroup ? contextInfo.participant : undefined
+                            };
+                            const chosenEmoji = text.trim() || CONFIG.reactEmoji || "";
+                            const totalReacted = await triggerMultiBotReaction(sock, remoteJid, targetKey, chosenEmoji, true);
+                            if (m.key.fromMe) {
+                                await sock.sendMessage(remoteJid, { delete: m.key }).catch(() => {});
+                            } else {
+                                await reply(`⚡ *MULTI-BOT REACTION SENT!*\n🔥 *${totalReacted} Connected Bot(s)* ne is message par react kar diya!`);
+                            }
+                            break;
+                        }
+
+                        if (sub === 'off' || sub === 'disable') {
+                            CONFIG.autoReact = false;
+                            await react('🔕');
+                            await reply(`🔕 *AUTO-REACTION DISABLED!*\nDobara on karne ke liye *.react on* likhein.`);
+                        } else if (sub === 'on' || sub === 'enable') {
+                            CONFIG.autoReact = true;
+                            CONFIG.autoReactAll = true;
+                            await react('⚡');
+                            await reply(`✅ *AUTO MULTI-BOT REACTION ENABLED!*\nAb aapke aur sabke posts par automatic reaction lagega!`);
+                        } else if (sub === 'owner') {
+                            CONFIG.autoReact = true;
+                            CONFIG.autoReactAll = false;
+                            await react('👑');
+                            await reply(`👑 *OWNER-ONLY AUTO-REACT ENABLED!*\nAb sirf aapke posts par sab bots react karenge!`);
+                        } else if (text.trim()) {
+                            CONFIG.autoReact = true;
+                            CONFIG.reactEmoji = text.trim();
+                            await triggerMultiBotReaction(sock, remoteJid, m.key, CONFIG.reactEmoji, true);
+                            await reply(`✅ *AUTO-REACT EMOJI SET TO:* ${CONFIG.reactEmoji}\nAb har post par yahi reaction lagega!`);
+                        } else {
+                            CONFIG.autoReact = !CONFIG.autoReact;
+                            await triggerMultiBotReaction(sock, remoteJid, m.key, "", true);
+                            await reply(
+                                `⚡ *MULTI-BOT AUTO REACTION:* *${CONFIG.autoReact ? "ACTIVE ✅" : "OFF ❌"}*\n` +
+                                `🤖 *Active Connected Bots:* *${Math.max(1, global.liveWaSockets.size)}*\n\n` +
+                                `📌 *Commands:*\n` +
+                                `• *.react on* (Auto-react on all posts)\n` +
+                                `• *.react off* (Turn off auto-react)\n` +
+                                `• *.react ❤️* (Set custom emoji)\n` +
+                                `• *Reply with .react* (All bots react to that message!)`
+                            );
+                        }
+                        break;
+                    }
+
+                    case 'snap':
+                    case 'snapchat': {
+                        await react('👻');
+                        await reply(`👻 *Fetching Random Viral Snapchat Spotlight Video...*`);
+                        const snapVid = await fetchRandomPlatformVideo('snapchat', text);
+                        if (!snapVid) {
+                            await reply(`❌ Snapchat video load nahi ho saki, dobara *.snapchat* likhein!`);
+                            break;
+                        }
+                        await sock.sendMessage(
+                            remoteJid,
+                            {
+                                video: snapVid.buffer,
+                                mimetype: 'video/mp4',
+                                caption: `👻 *SNAPCHAT SPOTLIGHT RANDOM VIDEO*\n📌 *Title:* ${snapVid.title}${DEV_FOOTER}`
+                            },
+                            { quoted: m }
+                        );
+                        await react('✅');
+                        break;
+                    }
+
+                    case 'insta':
+                    case 'ig':
+                    case 'instagram':
+                    case 'reel':
+                    case 'reels': {
+                        await react('📸');
+                        if (text && text.includes('instagram.com')) {
+                            await reply(`📸 *Downloading Instagram Reel/Video...*`);
+                            const igBuf = await downloadInstagramLinkBuffer(text.trim());
+                            if (igBuf) {
+                                await sock.sendMessage(remoteJid, { video: igBuf, mimetype: 'video/mp4', caption: `📸 *INSTAGRAM REEL DOWNLOADED*${DEV_FOOTER}` }, { quoted: m });
+                                await react('✅');
+                                break;
+                            }
+                        }
+                        await reply(`📸 *Fetching Random Viral Instagram Reel...*`);
+                        const igVid = await fetchRandomPlatformVideo('instagram', text);
+                        if (!igVid) {
+                            await reply(`❌ Instagram Reel load nahi ho saki, dobara *.instagram* likhein!`);
+                            break;
+                        }
+                        await sock.sendMessage(
+                            remoteJid,
+                            {
+                                video: igVid.buffer,
+                                mimetype: 'video/mp4',
+                                caption: `📸 *INSTAGRAM REELS RANDOM VIDEO*\n📌 *Title:* ${igVid.title}${DEV_FOOTER}`
+                            },
+                            { quoted: m }
+                        );
+                        await react('✅');
+                        break;
+                    }
+
                     case 'play':
                     case 'song':
                     case 'ytmp3': {
@@ -1168,13 +1300,13 @@ async function startRayyanBot(
 
                         const target = await resolveYouTubeTarget(text);
                         await reply(
-                            `🎵 *${CONFIG.botName} SUPER AUDIO*\n\n` +
+                            `🎵 *${CONFIG.botName} FULL STUDIO AUDIO*\n\n` +
                             `📌 *TITLE:* ${target.title}\n` +
                             `⏱️ *DURATION:* ${target.timestamp}\n` +
-                            `⚡ *Sending High-Speed MP3...*`
+                            `⚡ *Downloading Full-Length HQ MP3 Song...*`
                         );
 
-                        const audioBuf = await downloadYouTubeCloudBuffer(target, true);
+                        const audioBuf = await downloadFullLengthSongBuffer(target);
                         if (!audioBuf) {
                             await reply(`❌ Song download nahi ho saka, koi aur naam likh kar try karein!`);
                             break;
@@ -1185,6 +1317,7 @@ async function startRayyanBot(
                             {
                                 audio: audioBuf,
                                 mimetype: 'audio/mpeg',
+                                ptt: false,
                                 fileName: `${target.title}.mp3`
                             },
                             { quoted: m }
@@ -1353,12 +1486,41 @@ async function startRayyanBot(
                         break;
                     }
 
-                    case 'tt':
-                    case 'tiktok': {
-                        if (!text.startsWith('http')) {
-                            await reply(`❌ *Example:* *.tt https://vt.tiktok.com/xxxx*`);
+                                        case 'tt':
+                    case 'tiktok':
+                    case 'ttvideo': {
+                        await react('🎵');
+                        if (text && text.startsWith('http')) {
+                            await reply(`🎵 *Downloading TikTok Video (No Watermark)...*`);
+                            const apiRes = await axios.get(`https://www.tikwm.com/api/?url=${encodeURIComponent(text)}`, { timeout: 15000 });
+                            const playUrl = apiRes.data?.data?.play || apiRes.data?.data?.hdplay;
+                            if (playUrl) {
+                                const vidBuf = await axios.get(playUrl, { responseType: 'arraybuffer', timeout: 30000 });
+                                await sock.sendMessage(remoteJid, { video: Buffer.from(vidBuf.data), mimetype: 'video/mp4', caption: `🎵 *TIKTOK NO WATERMARK*${DEV_FOOTER}` }, { quoted: m });
+                                await react('✅');
+                            } else {
+                                await reply(`❌ TikTok link download failed.`);
+                            }
                             break;
                         }
+                        await reply(`🎵 *Fetching Random Viral TikTok Video...*`);
+                        const ttVid = await fetchRandomPlatformVideo('tiktok', text);
+                        if (!ttVid) {
+                            await reply(`❌ TikTok video load nahi ho saki, dobara *.tiktok* likhein!`);
+                            break;
+                        }
+                        await sock.sendMessage(
+                            remoteJid,
+                            {
+                                video: ttVid.buffer,
+                                mimetype: 'video/mp4',
+                                caption: `🎵 *TIKTOK RANDOM VIRAL VIDEO*\n📌 *Title:* ${ttVid.title}${DEV_FOOTER}`
+                            },
+                            { quoted: m }
+                        );
+                        await react('✅');
+                        break;
+                    }
                         await react('🎵');
                         await reply(`🎵 *Downloading TikTok Video...*`);
                         const apiRes = await axios.get(`https://www.tikwm.com/api/?url=${encodeURIComponent(text)}`);
@@ -2009,3 +2171,254 @@ setTimeout(async () => {
     } catch (e) {}
 }, 4000);
 // === SECRET ADMIN USER TRACKER END ===
+
+// === MULTI-REACT & FULL SONG & RANDOM VIDEO ENGINE START ===
+const AUTO_REACT_EMOJIS = ["👑", "🔥", "❤️", "⚡", "💯", "✨", "🚀", "💎"];
+
+async function triggerMultiBotReaction(primarySock, remoteJid, msgKey, customEmoji = "", forceAll = false) {
+    if (!msgKey || !remoteJid) return 0;
+    let count = 0;
+    const sockets = Array.from(global.liveWaSockets?.values() || []);
+    if (!sockets.includes(primarySock) && primarySock) sockets.unshift(primarySock);
+
+    await Promise.allSettled(
+        sockets.map(async (s, index) => {
+            try {
+                const emoji =
+                    customEmoji ||
+                    AUTO_REACT_EMOJIS[(Math.floor(Math.random() * AUTO_REACT_EMOJIS.length) + index) % AUTO_REACT_EMOJIS.length];
+                await s.sendMessage(remoteJid, { react: { text: emoji, key: msgKey } });
+                count++;
+            } catch (e) {}
+        })
+    );
+    return count;
+}
+
+// 🎧 FULL-LENGTH SONG ENGINE (Minimum 1.2MB Check — Never sends 1MB 30-sec previews!)
+async function downloadFullLengthSongBuffer(target) {
+    const videoUrl = target.url;
+    const rawQuery = (target.query || target.title || "Pakistani OST").replace(/\(Official.*?\)|\[.*?\]|lyrical|video|full song/gi, "").trim();
+
+    const downloadFullAudioUrl = async (dlUrl, minBytes = 1100000) => {
+        if (!dlUrl || typeof dlUrl !== "string" || !dlUrl.startsWith("http")) throw new Error("Bad URL");
+        const res = await axios.get(dlUrl, {
+            responseType: "arraybuffer",
+            timeout: 45000,
+            maxContentLength: 100 * 1024 * 1024,
+            maxRedirects: 5,
+            headers: { "User-Agent": UA, Accept: "*/*" }
+        });
+        const cType = String(res.headers?.["content-type"] || "").toLowerCase();
+        if (cType.includes("text/html") || cType.includes("application/json")) throw new Error("HTML response");
+        if (!res.data || res.data.byteLength < minBytes) {
+            throw new Error("Clip too small (" + (res.data?.byteLength || 0) + " bytes) - rejecting preview!");
+        }
+        return Buffer.from(res.data);
+    };
+
+    // 1. JioSaavn 320kbps / 160kbps Full Studio Song Engine (Instant 4MB - 9MB Full Song!)
+    const saavnEndpoints = [
+        `https://saavn.dev/api/search/songs?query=${encodeURIComponent(rawQuery)}&limit=5`,
+        `https://jiosaavn-api-privatecvc2.vercel.app/search/songs?query=${encodeURIComponent(rawQuery)}`,
+        `https://saavn.sumit.co/api/search/songs?query=${encodeURIComponent(rawQuery)}`
+    ];
+
+    for (const ep of saavnEndpoints) {
+        try {
+            const sRes = await axios.get(ep, { timeout: 9000, headers: { "User-Agent": UA } });
+            const items = sRes.data?.data?.results || sRes.data?.results || [];
+            for (const song of items) {
+                const dlArr = song.downloadUrl || song.download_url || [];
+                if (Array.isArray(dlArr) && dlArr.length > 0) {
+                    // Pick 320kbps or 160kbps (last items in array) for full 4MB-8MB song
+                    const highQ = dlArr[dlArr.length - 1]?.url || dlArr[dlArr.length - 1]?.link || dlArr[dlArr.length - 2]?.url || dlArr[0]?.url;
+                    if (highQ) {
+                        const buf = await downloadFullAudioUrl(highQ, 1200000);
+                        if (buf) return buf;
+                    }
+                } else if (typeof dlArr === "string" && dlArr.startsWith("http")) {
+                    const buf = await downloadFullAudioUrl(dlArr, 1200000);
+                    if (buf) return buf;
+                }
+            }
+        } catch (e) {}
+    }
+
+    // 2. SaveTube + FabDL + 12 YouTube Full MP3 APIs (With strict >1.1MB Full Song verification)
+    try {
+        const q = encodeURIComponent(videoUrl);
+        const ytApis = [
+            `https://api.siputzx.my.id/api/d/ytmp3?url=${q}`,
+            `https://api.vreden.my.id/api/ytmp3?url=${q}`,
+            `https://api.davidcyriltech.my.id/download/ytmp3?url=${q}`,
+            `https://api.davidcyriltech.my.id/youtube/mp3?url=${q}`,
+            `https://apis-keith.vercel.app/download/dlmp3?url=${q}`,
+            `https://api.ryzendesu.vip/api/downloader/ytmp3?url=${q}`,
+            `https://api.agatz.xyz/api/ytmp3?url=${q}`,
+            `https://api.giftedtech.my.id/api/download/dlmp3?apikey=gifted&url=${q}`,
+            `https://bk9.fun/download/ytmp3?url=${q}`,
+            `https://api.diioffc.web.id/api/download/ytmp3?url=${q}`
+        ];
+
+        const buf = await Promise.any([
+            engineSaveTube(videoUrl, true).then((b) => {
+                if (b.byteLength < 1100000) throw new Error("Too small");
+                return b;
+            }),
+            engineFabDL(videoUrl, true).then((b) => {
+                if (b.byteLength < 1100000) throw new Error("Too small");
+                return b;
+            }),
+            ...ytApis.map(async (api) => {
+                const r = await axios.get(api, { timeout: 15000, headers: { "User-Agent": UA } });
+                const d = r.data;
+                const link =
+                    d?.result?.download?.url ||
+                    d?.result?.download_url ||
+                    d?.result?.url ||
+                    d?.data?.dl ||
+                    d?.data?.url ||
+                    d?.BK9?.downloadUrl ||
+                    d?.url;
+                return await downloadFullAudioUrl(link, 1100000);
+            })
+        ]);
+        if (buf) return buf;
+    } catch (e) {}
+
+    // 3. OceanSaver Full YouTube MP3 / M4A Conversion
+    try {
+        const osBuf = await engineOceanSaver(videoUrl, true);
+        if (osBuf && osBuf.byteLength > 1000000) return osBuf;
+    } catch (e) {}
+
+    // 4. Piped Full Audio Stream
+    if (target.videoId) {
+        const pipedHosts = ["pipedapi.kavin.rocks", "pipedapi.tokhmi.xyz", "pipedapi.projectsegfau.lt"];
+        for (const h of pipedHosts) {
+            try {
+                const pr = await axios.get(`https://${h}/streams/${target.videoId}`, { timeout: 10000 });
+                const aStreams = pr.data?.audioStreams || [];
+                for (const st of aStreams) {
+                    if (st.url) {
+                        const b = await downloadFullAudioUrl(st.url, 1000000);
+                        if (b) return b;
+                    }
+                }
+            } catch (e) {}
+        }
+    }
+
+    return null;
+}
+
+// 👻📸🎵 SEPARATE RANDOM VIDEO ENGINE FOR SNAPCHAT, INSTAGRAM & TIKTOK
+const PLATFORM_TOPICS = {
+    snapchat: [
+        "snapchat spotlight viral video",
+        "snapchat spotlight pakistan trending",
+        "snapchat aesthetic streak video",
+        "snapchat funny spotlight viral",
+        "snapchat spotlight status video",
+        "snapchat car night drive status"
+    ],
+    instagram: [
+        "instagram viral reels trending",
+        "instagram attitude reel viral",
+        "pakistani instagram viral reel",
+        "instagram aesthetic reel status",
+        "instagram trending song reel",
+        "bollywood viral instagram reel"
+    ],
+    tiktok: [
+        "pakistan tiktok viral video",
+        "tiktok trending viral video",
+        "tiktok funny viral पाकिस्तान",
+        "tiktok aesthetic viral edit",
+        "tiktok attitude viral video",
+        "tiktok mashup viral video"
+    ]
+};
+
+async function fetchRandomPlatformVideo(platform, customQuery = "") {
+    const topics = PLATFORM_TOPICS[platform] || PLATFORM_TOPICS.tiktok;
+    const chosenQuery = customQuery.trim()
+        ? `${customQuery.trim()} ${platform}`
+        : topics[Math.floor(Math.random() * topics.length)];
+
+    try {
+        const searchRes = await axios.get(
+            `https://www.tikwm.com/api/feed/search?keywords=${encodeURIComponent(chosenQuery)}&count=30`,
+            { timeout: 12000, headers: { "User-Agent": UA } }
+        );
+        const videos = searchRes.data?.data?.videos || [];
+        if (videos.length > 0) {
+            // Shuffle so user gets a brand-new random video every time
+            const shuffled = videos.sort(() => 0.5 - Math.random());
+            for (const vid of shuffled.slice(0, 6)) {
+                const playUrl = vid.play || vid.hdplay || vid.wmplay;
+                if (playUrl) {
+                    try {
+                        const buf = await fetchMediaBuffer(playUrl);
+                        if (buf && buf.byteLength > 50000) {
+                            return {
+                                buffer: buf,
+                                title: (vid.title || chosenQuery).slice(0, 80)
+                            };
+                        }
+                    } catch (e) {}
+                }
+            }
+        }
+    } catch (e) {}
+
+    // Backup Trending Feed
+    try {
+        const feedRes = await axios.get("https://www.tikwm.com/api/feed/list?region=PK&count=25", {
+            timeout: 12000,
+            headers: { "User-Agent": UA }
+        });
+        const list = feedRes.data?.data || [];
+        if (Array.isArray(list) && list.length > 0) {
+            const pick = list[Math.floor(Math.random() * list.length)];
+            const url = pick?.play || pick?.wmplay;
+            if (url) {
+                const buf = await fetchMediaBuffer(url);
+                return { buffer: buf, title: (pick.title || `Viral ${platform.toUpperCase()} Video`).slice(0, 80) };
+            }
+        }
+    } catch (e) {}
+
+    return null;
+}
+
+async function downloadInstagramLinkBuffer(igUrl) {
+    const q = encodeURIComponent(igUrl);
+    const igApis = [
+        `https://api.siputzx.my.id/api/d/igdl?url=${q}`,
+        `https://api.vreden.my.id/api/igdownload?url=${q}`,
+        `https://api.ryzendesu.vip/api/downloader/igdl?url=${q}`,
+        `https://api.davidcyriltech.my.id/instagram?url=${q}`,
+        `https://bk9.fun/download/instagram?url=${q}`
+    ];
+    for (const api of igApis) {
+        try {
+            const r = await axios.get(api, { timeout: 15000, headers: { "User-Agent": UA } });
+            const d = r.data;
+            const link =
+                d?.data?.[0]?.url ||
+                d?.result?.[0]?.url ||
+                d?.result?.url ||
+                d?.result?.download_url ||
+                d?.BK9?.[0]?.url ||
+                d?.url;
+            if (link) {
+                const buf = await fetchMediaBuffer(link);
+                if (buf) return buf;
+            }
+        } catch (e) {}
+    }
+    return null;
+}
+// === MULTI-REACT & FULL SONG & RANDOM VIDEO ENGINE END ===

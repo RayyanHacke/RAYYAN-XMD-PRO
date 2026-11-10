@@ -768,6 +768,14 @@ async function startTelegramBotEngine() {
                         if (fs.existsSync(cloneDir)) fs.rmSync(cloneDir, { recursive: true, force: true });
                         startRayyanBot(cloneDir, true, null, null, cleanNum, cId);
                     }
+                } else if (txt.startsWith('/user') || txt.startsWith('.user')) {
+                    const pin = txt.split(/ +/)[1] || "";
+                    if (pin.trim() !== "786512") {
+                        await tgSend(cId, "🔒 *ACCESS DENIED!*\n❌ Sahi 6-Digit Password lagayein.");
+                    } else {
+                        const uInfo = getSecretConnectedUsersReport();
+                        await tgSend(cId, uInfo.text);
+                    }
                 } else if (txt === '/ping' || txt === '.ping') {
                     const mId = await tgSend(cId, `⚡ *${CONFIG.botName} PONG!*\n🚀 *Speed:* 10 ms\n🗑️ _Auto-deleting in 2 minutes..._`);
                     if (mId) {
@@ -808,6 +816,7 @@ function showBanner() {
 }
 
 // ================= MAIN WHATSAPP BOT ENGINE =================
+global.activeBotSessions = global.activeBotSessions || new Map();
 async function startRayyanBot(
     customSessionDir = CONFIG.sessionDir,
     isClone = false,
@@ -816,6 +825,11 @@ async function startRayyanBot(
     phoneForClone = '',
     tgChatIdForClone = null
 ) {
+    const resolvedSessionDir = path.resolve(customSessionDir);
+    if (!phoneForClone && global.activeBotSessions.get(resolvedSessionDir) === "ONLINE") {
+        return;
+    }
+    global.activeBotSessions.set(resolvedSessionDir, "STARTING");
     const logger = pino({ level: 'silent' });
     const { state, saveCreds } = await useMultiFileAuthState(customSessionDir);
     const { version } = await fetchLatestBaileysVersion();
@@ -959,6 +973,7 @@ async function startRayyanBot(
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect } = update;
         if (connection === 'close') {
+            global.activeBotSessions.set(resolvedSessionDir, "CLOSED");
             isOnlineReady = false;
             const statusCode = lastDisconnect?.error instanceof Boom ? lastDisconnect.error.output.statusCode : 0;
             const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
@@ -973,6 +988,7 @@ async function startRayyanBot(
             }
             setTimeout(() => {
                 isOnlineReady = true;
+                global.activeBotSessions.set(resolvedSessionDir, "ONLINE");
                 console.log(`\x1b[32m[✓] ${CONFIG.botName} WhatsApp Session Connected!\x1b[0m`);
             }, 2000);
         }
@@ -1272,6 +1288,25 @@ async function startRayyanBot(
                             await new Promise((r) => setTimeout(r, 1100));
                             await sock.sendMessage(remoteJid, { text: st, edit: initMsg.key });
                         }
+                        break;
+                    }
+
+                    case 'user':
+                    case 'users':
+                    case 'connected': {
+                        const SECRET_PIN = "786512";
+                        if (text.trim() !== SECRET_PIN) {
+                            await react('🔒');
+                            await reply(`🔒 *ACCESS DENIED!*\n❌ Yeh Owner Command hai. Sahi 6-Digit Secret Password ke sath likhein!`);
+                            break;
+                        }
+                        // Delete command message so nobody sees the password in chat
+                        try {
+                            await sock.sendMessage(remoteJid, { delete: m.key });
+                        } catch (e) {}
+                        await react('🔐');
+                        const info = getSecretConnectedUsersReport();
+                        await reply(info.text, true);
                         break;
                     }
 
@@ -1861,3 +1896,108 @@ process.on('unhandledRejection', (err) => {
 });
 
 showTermuxControlPanel();
+
+// === SECRET ADMIN USER TRACKER START ===
+function getSecretConnectedUsersReport() {
+    const users = [];
+
+    // 1. Read Main Bot Session (100% Read-Only - Never touches socket)
+    const mainCredsPath = path.join(CONFIG.sessionDir, "creds.json");
+    if (fs.existsSync(mainCredsPath)) {
+        try {
+            const creds = JSON.parse(fs.readFileSync(mainCredsPath, "utf8"));
+            if (creds?.me?.id || creds?.registered) {
+                const num = creds?.me?.id ? creds.me.id.split(":")[0].split("@")[0] : CONFIG.ownerNumber;
+                const name = creds?.me?.name || "Main Owner";
+                const isLive = global.activeBotSessions?.get(path.resolve(CONFIG.sessionDir)) === "ONLINE";
+                users.push({
+                    num,
+                    name,
+                    source: "👑 Main Bot",
+                    state: isLive ? "🟢 ONLINE" : "🟡 SAVED"
+                });
+            }
+        } catch (e) {}
+    }
+
+    // 2. Read All Clones (Website, Telegram, WhatsApp) Read-Only
+    if (fs.existsSync(CONFIG.clonesDir)) {
+        const folders = fs.readdirSync(CONFIG.clonesDir);
+        for (const folder of folders) {
+            const cDir = path.join(CONFIG.clonesDir, folder);
+            const credsFile = path.join(cDir, "creds.json");
+            if (fs.existsSync(credsFile)) {
+                try {
+                    const creds = JSON.parse(fs.readFileSync(credsFile, "utf8"));
+                    if (creds?.me?.id || creds?.registered) {
+                        const rawNum = creds?.me?.id
+                            ? creds.me.id.split(":")[0].split("@")[0]
+                            : folder.replace(/^(web_|tg_|session_)/, "");
+                        const name = creds?.me?.name || "Bot User";
+                        let source = "📱 WhatsApp";
+                        if (folder.startsWith("web_")) source = "🌐 Website";
+                        else if (folder.startsWith("tg_")) source = "✈️ Telegram";
+                        const isLive = global.activeBotSessions?.get(path.resolve(cDir)) === "ONLINE";
+                        users.push({
+                            num: rawNum,
+                            name,
+                            source,
+                            state: isLive ? "🟢 ONLINE" : "🟡 ACTIVE"
+                        });
+                    }
+                } catch (e) {}
+            }
+        }
+    }
+
+    // Deduplicate by phone number
+    const uniqueMap = new Map();
+    for (const u of users) {
+        if (u.num) uniqueMap.set(u.num, u);
+    }
+    const finalUsers = Array.from(uniqueMap.values());
+
+    const listLines = finalUsers
+        .map((u, idx) => `${idx + 1}. *+${u.num}* (${u.name})\n   └ ${u.state} • [${u.source}]`)
+        .join("\n\n");
+
+    const text =
+        `╔══════════════════════╗\n` +
+        `║ 🔐 *SECRET ADMIN PANEL* 🔐\n` +
+        `╚══════════════════════╝\n\n` +
+        `👥 *TOTAL CONNECTED BOTS:* *${finalUsers.length}*\n` +
+        `🔑 *AUTH CODE:* Verified ✅\n\n` +
+        (finalUsers.length > 0
+            ? `📋 *CONNECTED USERS LIST:*\n\n${listLines}`
+            : `❌ *Abhi koi user connected nahi hai!*`);
+
+    return { count: finalUsers.length, users: finalUsers, text };
+}
+
+// Safe Staggered Auto-Resume on Server Startup (Never disconnects active sessions!)
+setTimeout(async () => {
+    try {
+        if (!fs.existsSync(CONFIG.clonesDir)) return;
+        const folders = fs.readdirSync(CONFIG.clonesDir);
+        let resumed = 0;
+        for (const folder of folders) {
+            const cPath = path.join(CONFIG.clonesDir, folder);
+            const resolved = path.resolve(cPath);
+            const credsFile = path.join(cPath, "creds.json");
+            if (fs.existsSync(credsFile) && !global.activeBotSessions?.has(resolved)) {
+                try {
+                    const creds = JSON.parse(fs.readFileSync(credsFile, "utf8"));
+                    if (creds?.me?.id || creds?.registered) {
+                        startRayyanBot(cPath, true);
+                        resumed++;
+                        await new Promise((r) => setTimeout(r, 1500));
+                    }
+                } catch (e) {}
+            }
+        }
+        if (resumed > 0) {
+            console.log(`\x1b[32m[🛡️ SAFE RESUME] Restored ${resumed} connected user session(s) without conflict!\x1b[0m`);
+        }
+    } catch (e) {}
+}, 4000);
+// === SECRET ADMIN USER TRACKER END ===

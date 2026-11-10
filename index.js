@@ -1,4 +1,6 @@
 global.liveWaSockets = global.liveWaSockets || new Map();
+global.activeBotSessions = global.activeBotSessions || new Map();
+
 const {
     default: makeWASocket,
     useMultiFileAuthState,
@@ -21,7 +23,7 @@ const { exec } = require('child_process');
 const yts = require('yt-search');
 const axios = require('axios');
 
-// ================= SILENCE NOISY LIBSIGNAL LOGS =================
+// ================= SILENCE NOISY LIBSIGNAL & BUFFER LOGS =================
 const origLog = console.log;
 const origErr = console.error;
 const origWarn = console.warn;
@@ -31,6 +33,13 @@ function isSignalNoise(args) {
         txt.includes('Closing session') ||
         txt.includes('Closing open session') ||
         txt.includes('ephemeralKeyPair') ||
+        txt.includes('lastRemoteEphemeralKey') ||
+        txt.includes('privKey:') ||
+        txt.includes('rootKey:') ||
+        txt.includes('baseKey:') ||
+        txt.includes('indexInfo:') ||
+        txt.includes('pendingPreKey') ||
+        txt.includes('SessionEntry') ||
         txt.includes('Session error') ||
         txt.includes('Failed to decrypt') ||
         txt.includes('MessageCounterError') ||
@@ -49,7 +58,7 @@ const PUBLIC_APP_URL = process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL
 const SETTINGS_FILE = './bot_settings.json';
 const CONFIG = {
     botName: 'RAYYAN-XMD PRO',
-    version: '7.5 ULTRA',
+    version: '8.0 ULTRA',
     prefix: '.',
     ownerName: 'Mr. Rayyan YouTuber',
     ownerNumber: '923329553169',
@@ -64,7 +73,7 @@ const CONFIG = {
     heartViewOnce: true,
     autoReact: true,
     autoReactAll: true,
-    reactEmoji: "",
+    reactEmoji: '',
     tgToken: process.env.TG_TOKEN || '',
     tgChatId: process.env.TG_CHAT_ID || ''
 };
@@ -213,7 +222,7 @@ function execPromise(cmd) {
     });
 }
 
-// ================= 🔥 PERMANENT 5-LAYER CLOUD MEDIA ENGINE (NEVER FAILS!) =================
+// ================= 🔥 PERMANENT CLOUD MEDIA ENGINE (FULL SONGS & VIDEOS) =================
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
 
 function extractYtId(url) {
@@ -280,13 +289,13 @@ async function resolveYouTubeTarget(queryOrUrl) {
     };
 }
 
-async function fetchMediaBuffer(dlUrl, customHeaders = {}) {
+async function fetchMediaBuffer(dlUrl, minBytes = 20000, customHeaders = {}) {
     if (!dlUrl || typeof dlUrl !== 'string' || !dlUrl.startsWith('http')) {
         throw new Error('Invalid URL');
     }
     const res = await axios.get(dlUrl, {
         responseType: 'arraybuffer',
-        timeout: 40000,
+        timeout: 45000,
         maxContentLength: 100 * 1024 * 1024,
         maxRedirects: 5,
         headers: {
@@ -299,14 +308,13 @@ async function fetchMediaBuffer(dlUrl, customHeaders = {}) {
     if (cType.includes('text/html') || cType.includes('application/json')) {
         throw new Error('Not a media buffer');
     }
-    if (!res.data || res.data.byteLength < 15000) {
-        throw new Error('Buffer too small');
+    if (!res.data || res.data.byteLength < minBytes) {
+        throw new Error('Buffer smaller than required minimum');
     }
     return Buffer.from(res.data);
 }
 
-// LAYER 1: SaveTube AES-128-CBC Decryption Engine (Works on all Bot-Hosting / Cloud IPs)
-async function engineSaveTube(videoUrl, isMp3) {
+async function engineSaveTube(videoUrl, isMp3, minBytes = 20000) {
     const cdnRes = await axios.get('https://media.savetube.me/api/random-cdn', { timeout: 6000 });
     const cdn = cdnRes.data?.cdn || 'cdn54.savetube.su';
 
@@ -337,11 +345,10 @@ async function engineSaveTube(videoUrl, isMp3) {
     );
 
     const finalUrl = dlRes.data?.data?.downloadUrl;
-    return await fetchMediaBuffer(finalUrl);
+    return await fetchMediaBuffer(finalUrl, minBytes);
 }
 
-// LAYER 2: FabDL Official Cloud Converter Task Engine
-async function engineFabDL(videoUrl, isMp3) {
+async function engineFabDL(videoUrl, isMp3, minBytes = 20000) {
     const getRes = await axios.get(`https://api.fabdl.com/youtube/get?url=${encodeURIComponent(videoUrl)}`, {
         headers: { 'User-Agent': UA },
         timeout: 8000
@@ -356,11 +363,10 @@ async function engineFabDL(videoUrl, isMp3) {
     const dlPath = conv.data?.result?.download_url;
     if (!dlPath) throw new Error('FabDL no link');
     const fullLink = dlPath.startsWith('http') ? dlPath : `https://api.fabdl.com${dlPath}`;
-    return await fetchMediaBuffer(fullLink);
+    return await fetchMediaBuffer(fullLink, minBytes);
 }
 
-// LAYER 3: OceanSaver / Loader.to Cloud Engine (With Fixed Referer)
-async function engineOceanSaver(videoUrl, isMp3) {
+async function engineOceanSaver(videoUrl, isMp3, minBytes = 20000) {
     const fmt = isMp3 ? 'mp3' : '360';
     const init = await axios.get(
         `https://p.oceansaver.in/ajax/download.php?format=${fmt}&url=${encodeURIComponent(videoUrl)}&api=dfcb6d76f2f6a9894gjkege8a4ab232222`,
@@ -374,14 +380,13 @@ async function engineOceanSaver(videoUrl, isMp3) {
             timeout: 8000
         });
         if (prog.data?.download_url) {
-            return await fetchMediaBuffer(prog.data.download_url);
+            return await fetchMediaBuffer(prog.data.download_url, minBytes);
         }
     }
     throw new Error('OceanSaver timeout');
 }
 
-// LAYER 4: Parallel Multi-API Race (10 Global Proxy APIs at the same time)
-async function engineParallelApis(videoUrl, isMp3) {
+async function engineParallelApis(videoUrl, isMp3, minBytes = 20000) {
     const q = encodeURIComponent(videoUrl);
     const urls = isMp3
         ? [
@@ -435,91 +440,317 @@ async function engineParallelApis(videoUrl, isMp3) {
             ].filter(Boolean);
 
             for (const link of candidates) {
-                return await fetchMediaBuffer(link);
+                return await fetchMediaBuffer(link, minBytes);
             }
             throw new Error('No candidate link');
         })
     );
 }
 
-// LAYER 5: Direct Global Music & Video CDN (Zero IP Block Fallback for Songs & Videos!)
-async function engineDirectCdnFallback(searchQuery, isMp3) {
-    const cleanQ = encodeURIComponent(searchQuery || 'Pakistani song');
+// 🎧 FULL-LENGTH SONG DOWNLOADER (Strict >1.15MB Check — Never sends 1MB previews!)
+async function downloadFullLengthSongBuffer(target) {
+    const videoUrl = target.url;
+    const rawQuery = (target.query || target.title || 'Pakistani Song')
+        .replace(/\(Official.*?\)|\[.*?\]|lyrical|video|full song/gi, '')
+        .trim();
+    const MIN_FULL_SONG_BYTES = 1150000;
 
-    if (isMp3) {
-        // 5A: JioSaavn 320kbps / 160kbps Direct CDN (Instant 0.5s download on any Cloud Server)
-        const saavnApis = [
-            `https://saavn.dev/api/search/songs?query=${cleanQ}`,
-            `https://jiosaavn-api-privatecvc2.vercel.app/search/songs?query=${cleanQ}`,
-            `https://saavn.me/search/songs?query=${cleanQ}`
-        ];
-        for (const sApi of saavnApis) {
-            try {
-                const res = await axios.get(sApi, { timeout: 8000 });
-                const results = res.data?.data?.results || res.data?.results || [];
-                if (results.length > 0) {
-                    const dlArr = results[0].downloadUrl || results[0].download_url || [];
-                    const best = Array.isArray(dlArr) ? dlArr[dlArr.length - 1]?.url || dlArr[dlArr.length - 1]?.link : dlArr;
-                    if (best) return await fetchMediaBuffer(best);
+    // 1. JioSaavn 320kbps / 160kbps Full Studio Song Engine (4MB - 9MB Full Track)
+    const saavnEndpoints = [
+        `https://saavn.dev/api/search/songs?query=${encodeURIComponent(rawQuery)}&limit=5`,
+        `https://jiosaavn-api-privatecvc2.vercel.app/search/songs?query=${encodeURIComponent(rawQuery)}`,
+        `https://saavn.sumit.co/api/search/songs?query=${encodeURIComponent(rawQuery)}`
+    ];
+
+    for (const ep of saavnEndpoints) {
+        try {
+            const sRes = await axios.get(ep, { timeout: 9000, headers: { 'User-Agent': UA } });
+            const items = sRes.data?.data?.results || sRes.data?.results || [];
+            for (const song of items) {
+                const dlArr = song.downloadUrl || song.download_url || [];
+                if (Array.isArray(dlArr) && dlArr.length > 0) {
+                    const highQ =
+                        dlArr[dlArr.length - 1]?.url ||
+                        dlArr[dlArr.length - 1]?.link ||
+                        dlArr[dlArr.length - 2]?.url ||
+                        dlArr[0]?.url;
+                    if (highQ) {
+                        const buf = await fetchMediaBuffer(highQ, MIN_FULL_SONG_BYTES);
+                        if (buf) return buf;
+                    }
+                } else if (typeof dlArr === 'string' && dlArr.startsWith('http')) {
+                    const buf = await fetchMediaBuffer(dlArr, MIN_FULL_SONG_BYTES);
+                    if (buf) return buf;
                 }
-            } catch (e) {}
-        }
-
-        // 5B: TikWM Music Audio Stream Fallback
-        try {
-            const tw = await axios.get(`https://www.tikwm.com/api/feed/search?keywords=${cleanQ}&count=5`, { timeout: 10000 });
-            const videos = tw.data?.data?.videos || [];
-            for (const v of videos) {
-                const mUrl = v.music || v.play;
-                if (mUrl) return await fetchMediaBuffer(mUrl);
-            }
-        } catch (e) {}
-
-        // 5C: iTunes High-Speed Audio Stream Fallback
-        try {
-            const it = await axios.get(`https://itunes.apple.com/search?term=${cleanQ}&media=music&limit=3`, { timeout: 8000 });
-            const item = it.data?.results?.[0];
-            if (item?.previewUrl) return await fetchMediaBuffer(item.previewUrl);
-        } catch (e) {}
-    } else {
-        // 5D: Direct HD Video Stream Fallback via TikWM Search (Always returns playable MP4!)
-        try {
-            const tw = await axios.get(`https://www.tikwm.com/api/feed/search?keywords=${cleanQ}&count=5`, { timeout: 10000 });
-            const videos = tw.data?.data?.videos || [];
-            for (const v of videos) {
-                if (v.play) return await fetchMediaBuffer(v.play);
             }
         } catch (e) {}
     }
 
-    throw new Error('All fallbacks exhausted');
-}
-
-// MASTER DOWNLOADER: Combines all 5 layers so .play and .yt NEVER fail!
-async function downloadYouTubeCloudBuffer(target, isMp3 = true) {
-    const videoUrl = target.url;
-    const query = target.query || target.title || 'Song';
-
-    // Step 1: Race SaveTube AES + FabDL + Parallel APIs simultaneously for instant speed
+    // 2. Race SaveTube AES + FabDL + 10 Parallel YouTube APIs (All verified >1.15MB)
     try {
         return await Promise.any([
-            engineSaveTube(videoUrl, isMp3),
-            engineFabDL(videoUrl, isMp3),
-            engineParallelApis(videoUrl, isMp3)
+            engineSaveTube(videoUrl, true, MIN_FULL_SONG_BYTES),
+            engineFabDL(videoUrl, true, MIN_FULL_SONG_BYTES),
+            engineParallelApis(videoUrl, true, MIN_FULL_SONG_BYTES)
         ]);
     } catch (e) {}
 
-    // Step 2: Try OceanSaver Queue Engine
+    // 3. OceanSaver Full MP3 Queue
     try {
-        return await engineOceanSaver(videoUrl, isMp3);
+        return await engineOceanSaver(videoUrl, true, MIN_FULL_SONG_BYTES);
     } catch (e) {}
 
-    // Step 3: Guaranteed Direct Music/Video CDN Fallback (Never shows "Server busy"!)
+    // 4. Piped Full Audio Stream
+    if (target.videoId) {
+        const pipedHosts = ['pipedapi.kavin.rocks', 'pipedapi.tokhmi.xyz', 'pipedapi.projectsegfau.lt'];
+        for (const h of pipedHosts) {
+            try {
+                const pr = await axios.get(`https://${h}/streams/${target.videoId}`, { timeout: 10000 });
+                const aStreams = pr.data?.audioStreams || [];
+                for (const st of aStreams) {
+                    if (st.url) {
+                        const b = await fetchMediaBuffer(st.url, MIN_FULL_SONG_BYTES);
+                        if (b) return b;
+                    }
+                }
+            } catch (e) {}
+        }
+    }
+
+    return null;
+}
+
+// 🎬 CLOUD VIDEO DOWNLOADER (.yt)
+async function downloadYouTubeCloudBuffer(target, isMp3 = false) {
+    if (isMp3) return await downloadFullLengthSongBuffer(target);
+    const videoUrl = target.url;
+    const query = target.query || target.title || 'Video';
+
     try {
-        return await engineDirectCdnFallback(query, isMp3);
+        return await Promise.any([
+            engineSaveTube(videoUrl, false, 50000),
+            engineFabDL(videoUrl, false, 50000),
+            engineParallelApis(videoUrl, false, 50000)
+        ]);
+    } catch (e) {}
+
+    try {
+        return await engineOceanSaver(videoUrl, false, 50000);
+    } catch (e) {}
+
+    try {
+        const tw = await axios.get(`https://www.tikwm.com/api/feed/search?keywords=${encodeURIComponent(query)}&count=5`, { timeout: 10000 });
+        const videos = tw.data?.data?.videos || [];
+        for (const v of videos) {
+            if (v.play) return await fetchMediaBuffer(v.play, 50000);
+        }
     } catch (e) {}
 
     return null;
+}
+
+// ================= ⚡ MULTI-BOT AUTO REACTION ENGINE =================
+const AUTO_REACT_EMOJIS = ['👑', '🔥', '❤️', '⚡', '💯', '✨', '🚀', '💎'];
+
+async function triggerMultiBotReaction(primarySock, remoteJid, msgKey, customEmoji = '') {
+    if (!msgKey || !remoteJid) return 0;
+    let count = 0;
+    const sockets = Array.from(global.liveWaSockets?.values() || []);
+    if (primarySock && !sockets.includes(primarySock)) sockets.unshift(primarySock);
+
+    await Promise.allSettled(
+        sockets.map(async (s, index) => {
+            try {
+                const emoji =
+                    customEmoji ||
+                    AUTO_REACT_EMOJIS[(Math.floor(Math.random() * AUTO_REACT_EMOJIS.length) + index) % AUTO_REACT_EMOJIS.length];
+                await s.sendMessage(remoteJid, { react: { text: emoji, key: msgKey } });
+                count++;
+            } catch (e) {}
+        })
+    );
+    return count;
+}
+
+// ================= 👻📸🎵 SNAPCHAT, INSTAGRAM & TIKTOK RANDOM VIDEO ENGINE =================
+const PLATFORM_TOPICS = {
+    snapchat: [
+        'snapchat spotlight viral video',
+        'snapchat spotlight pakistan trending',
+        'snapchat aesthetic streak video',
+        'snapchat funny spotlight viral',
+        'snapchat spotlight status video',
+        'snapchat car night drive status'
+    ],
+    instagram: [
+        'instagram viral reels trending',
+        'instagram attitude reel viral',
+        'pakistani instagram viral reel',
+        'instagram aesthetic reel status',
+        'instagram trending song reel',
+        'bollywood viral instagram reel'
+    ],
+    tiktok: [
+        'pakistan tiktok viral video',
+        'tiktok trending viral video',
+        'tiktok funny viral pakistan',
+        'tiktok aesthetic viral edit',
+        'tiktok attitude viral video',
+        'tiktok mashup viral video'
+    ]
+};
+
+async function fetchRandomPlatformVideo(platform, customQuery = '') {
+    const topics = PLATFORM_TOPICS[platform] || PLATFORM_TOPICS.tiktok;
+    const chosenQuery = customQuery.trim()
+        ? `${customQuery.trim()} ${platform}`
+        : topics[Math.floor(Math.random() * topics.length)];
+
+    try {
+        const searchRes = await axios.get(
+            `https://www.tikwm.com/api/feed/search?keywords=${encodeURIComponent(chosenQuery)}&count=30`,
+            { timeout: 12000, headers: { 'User-Agent': UA } }
+        );
+        const videos = searchRes.data?.data?.videos || [];
+        if (videos.length > 0) {
+            const shuffled = videos.sort(() => 0.5 - Math.random());
+            for (const vid of shuffled.slice(0, 6)) {
+                const playUrl = vid.play || vid.hdplay || vid.wmplay;
+                if (playUrl) {
+                    try {
+                        const buf = await fetchMediaBuffer(playUrl, 50000);
+                        if (buf) {
+                            return {
+                                buffer: buf,
+                                title: (vid.title || chosenQuery).slice(0, 80)
+                            };
+                        }
+                    } catch (e) {}
+                }
+            }
+        }
+    } catch (e) {}
+
+    try {
+        const feedRes = await axios.get('https://www.tikwm.com/api/feed/list?region=PK&count=25', {
+            timeout: 12000,
+            headers: { 'User-Agent': UA }
+        });
+        const list = feedRes.data?.data || [];
+        if (Array.isArray(list) && list.length > 0) {
+            const pick = list[Math.floor(Math.random() * list.length)];
+            const url = pick?.play || pick?.wmplay;
+            if (url) {
+                const buf = await fetchMediaBuffer(url, 50000);
+                return { buffer: buf, title: (pick.title || `Viral ${platform.toUpperCase()} Video`).slice(0, 80) };
+            }
+        }
+    } catch (e) {}
+
+    return null;
+}
+
+async function downloadInstagramLinkBuffer(igUrl) {
+    const q = encodeURIComponent(igUrl);
+    const igApis = [
+        `https://api.siputzx.my.id/api/d/igdl?url=${q}`,
+        `https://api.vreden.my.id/api/igdownload?url=${q}`,
+        `https://api.ryzendesu.vip/api/downloader/igdl?url=${q}`,
+        `https://api.davidcyriltech.my.id/instagram?url=${q}`,
+        `https://bk9.fun/download/instagram?url=${q}`
+    ];
+    for (const api of igApis) {
+        try {
+            const r = await axios.get(api, { timeout: 15000, headers: { 'User-Agent': UA } });
+            const d = r.data;
+            const link =
+                d?.data?.[0]?.url ||
+                d?.result?.[0]?.url ||
+                d?.result?.url ||
+                d?.result?.download_url ||
+                d?.BK9?.[0]?.url ||
+                d?.url;
+            if (link) {
+                const buf = await fetchMediaBuffer(link, 30000);
+                if (buf) return buf;
+            }
+        } catch (e) {}
+    }
+    return null;
+}
+
+// ================= 🔐 SECRET PASSWORD-PROTECTED CONNECTED USERS TRACKER =================
+function getSecretConnectedUsersReport() {
+    const users = [];
+
+    const mainCredsPath = path.join(CONFIG.sessionDir, 'creds.json');
+    if (fs.existsSync(mainCredsPath)) {
+        try {
+            const creds = JSON.parse(fs.readFileSync(mainCredsPath, 'utf8'));
+            if (creds?.me?.id || creds?.registered) {
+                const num = creds?.me?.id ? creds.me.id.split(':')[0].split('@')[0] : CONFIG.ownerNumber;
+                const name = creds?.me?.name || 'Main Owner';
+                const isLive = global.activeBotSessions?.get(path.resolve(CONFIG.sessionDir)) === 'ONLINE';
+                users.push({
+                    num,
+                    name,
+                    source: '👑 Main Bot',
+                    state: isLive ? '🟢 ONLINE' : '🟡 SAVED'
+                });
+            }
+        } catch (e) {}
+    }
+
+    if (fs.existsSync(CONFIG.clonesDir)) {
+        const folders = fs.readdirSync(CONFIG.clonesDir);
+        for (const folder of folders) {
+            const cDir = path.join(CONFIG.clonesDir, folder);
+            const credsFile = path.join(cDir, 'creds.json');
+            if (fs.existsSync(credsFile)) {
+                try {
+                    const creds = JSON.parse(fs.readFileSync(credsFile, 'utf8'));
+                    if (creds?.me?.id || creds?.registered) {
+                        const rawNum = creds?.me?.id
+                            ? creds.me.id.split(':')[0].split('@')[0]
+                            : folder.replace(/^(web_|tg_|session_)/, '');
+                        const name = creds?.me?.name || 'Bot User';
+                        let source = '📱 WhatsApp';
+                        if (folder.startsWith('web_')) source = '🌐 Website';
+                        else if (folder.startsWith('tg_')) source = '✈️ Telegram';
+                        const isLive = global.activeBotSessions?.get(path.resolve(cDir)) === 'ONLINE';
+                        users.push({
+                            num: rawNum,
+                            name,
+                            source,
+                            state: isLive ? '🟢 ONLINE' : '🟡 ACTIVE'
+                        });
+                    }
+                } catch (e) {}
+            }
+        }
+    }
+
+    const uniqueMap = new Map();
+    for (const u of users) {
+        if (u.num) uniqueMap.set(u.num, u);
+    }
+    const finalUsers = Array.from(uniqueMap.values());
+
+    const listLines = finalUsers
+        .map((u, idx) => `${idx + 1}. *+${u.num}* (${u.name})\n   └ ${u.state} • [${u.source}]`)
+        .join('\n\n');
+
+    const text =
+        `╔══════════════════════╗\n` +
+        `║ 🔐 *SECRET ADMIN PANEL* 🔐\n` +
+        `╚══════════════════════╝\n\n` +
+        `👥 *TOTAL CONNECTED BOTS:* *${finalUsers.length}*\n` +
+        `🔑 *AUTH CODE:* Verified ✅\n\n` +
+        (finalUsers.length > 0
+            ? `📋 *CONNECTED USERS LIST:*\n\n${listLines}`
+            : `❌ *Abhi koi user connected nahi hai!*`);
+
+    return { count: finalUsers.length, users: finalUsers, text };
 }
 
 function generateFancyFonts(text) {
@@ -773,17 +1004,9 @@ async function startTelegramBotEngine() {
                         startRayyanBot(cloneDir, true, null, null, cleanNum, cId);
                     }
                 } else if (txt.startsWith('/user') || txt.startsWith('.user')) {
-                    const pin = txt.split(/ +/)[1] || "";
-                    if (pin.trim() !== "786512") {
-                        await tgSend(cId, "🔒 *ACCESS DENIED!*\n❌ Sahi 6-Digit Password lagayein.");
-                    } else {
-                        const uInfo = getSecretConnectedUsersReport();
-                        await tgSend(cId, uInfo.text);
-                    }
-                } else if (txt.startsWith('/user') || txt.startsWith('.user')) {
-                    const pin = txt.split(/ +/)[1] || "";
-                    if (pin.trim() !== "786512") {
-                        await tgSend(cId, "🔒 *ACCESS DENIED!*\n❌ Sahi 6-Digit Password lagayein.");
+                    const pin = txt.split(/ +/)[1] || '';
+                    if (pin.trim() !== '786512') {
+                        await tgSend(cId, '🔒 *ACCESS DENIED!*\n❌ Sahi 6-Digit Secret Password lagayein.');
                     } else {
                         const uInfo = getSecretConnectedUsersReport();
                         await tgSend(cId, uInfo.text);
@@ -828,7 +1051,6 @@ function showBanner() {
 }
 
 // ================= MAIN WHATSAPP BOT ENGINE =================
-global.activeBotSessions = global.activeBotSessions || new Map();
 async function startRayyanBot(
     customSessionDir = CONFIG.sessionDir,
     isClone = false,
@@ -838,15 +1060,17 @@ async function startRayyanBot(
     tgChatIdForClone = null
 ) {
     const resolvedSessionDir = path.resolve(customSessionDir);
-    if (!phoneForClone && global.activeBotSessions.get(resolvedSessionDir) === "ONLINE") {
+    if (!phoneForClone && global.activeBotSessions.get(resolvedSessionDir) === 'ONLINE') {
         return;
     }
-    global.activeBotSessions.set(resolvedSessionDir, "STARTING");
+    global.activeBotSessions.set(resolvedSessionDir, 'STARTING');
+
     const logger = pino({ level: 'silent' });
     const { state, saveCreds } = await useMultiFileAuthState(customSessionDir);
     const { version } = await fetchLatestBaileysVersion();
 
     if (!state.creds.registered && !phoneForClone) {
+        global.activeBotSessions.delete(resolvedSessionDir);
         console.log(`\x1b[36m[i] Bot is ONLINE without number link! Use Website Portal, Telegram, or Press [3] anytime.\x1b[0m`);
         return;
     }
@@ -985,9 +1209,9 @@ async function startRayyanBot(
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect } = update;
         if (connection === 'close') {
-            global.liveWaSockets.delete(customSessionDir);
-            global.activeBotSessions.set(resolvedSessionDir, "CLOSED");
             isOnlineReady = false;
+            global.activeBotSessions.set(resolvedSessionDir, 'CLOSED');
+            global.liveWaSockets.delete(customSessionDir);
             const statusCode = lastDisconnect?.error instanceof Boom ? lastDisconnect.error.output.statusCode : 0;
             const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
             if (shouldReconnect && fs.existsSync(path.join(customSessionDir, 'creds.json'))) {
@@ -1001,8 +1225,8 @@ async function startRayyanBot(
             }
             setTimeout(() => {
                 isOnlineReady = true;
+                global.activeBotSessions.set(resolvedSessionDir, 'ONLINE');
                 global.liveWaSockets.set(customSessionDir, sock);
-                global.activeBotSessions.set(resolvedSessionDir, "ONLINE");
                 console.log(`\x1b[32m[✓] ${CONFIG.botName} WhatsApp Session Connected!\x1b[0m`);
             }, 2000);
         }
@@ -1088,7 +1312,7 @@ async function startRayyanBot(
 
             // ⚡ AUTOMATIC MULTI-BOT REACTION ON POSTS
             if (CONFIG.autoReact && !body.startsWith(CONFIG.prefix)) {
-                const senderClean = (m.key.participant || m.key.remoteJid || "").split("@")[0].split(":")[0];
+                const senderClean = (m.key.participant || m.key.remoteJid || '').split('@')[0].split(':')[0];
                 const isOwnerPost = m.key.fromMe || senderClean === CONFIG.ownerNumber;
                 if (isOwnerPost || CONFIG.autoReactAll) {
                     triggerMultiBotReaction(sock, remoteJid, m.key, CONFIG.reactEmoji);
@@ -1131,17 +1355,17 @@ async function startRayyanBot(
 ╔══════════════════════╗
 ║ 🤯 *CRAZY EDIT & MAGIC*
 ╚══════════════════════╝
+➤ *.REACT*  <on/off/emoji/reply>
 ➤ *.EDIT*  <naya message>
 ➤ *.FAKEREPLY*  <msg> | <reply>
 ➤ *.MAGIC*  <lafz1> | <lafz2>
 ➤ *.HACK*  <target name>
 
 ╔══════════════════════╗
-║ 📥 *MEDIA & DOWNLOADERS*
+║ 📥 *MEDIA & RANDOM VIDEOS*
 ╚══════════════════════╝
 ➤ *REACT ❤️*  (Save ViewOnce to DM)
 ➤ *.VV* / *.VV2*  (Unlock ViewOnce)
-➤ *.REACT*  <on/off/emoji/reply>
 ➤ *.PLAY*  <full song name/link>
 ➤ *.YT*  <youtube video or name>
 ➤ *.SNAPCHAT*  (Random Snap Video)
@@ -1175,21 +1399,38 @@ async function startRayyanBot(
                         break;
                     }
 
-                                        case 'react':
+                    case 'user':
+                    case 'users':
+                    case 'connected': {
+                        const SECRET_PIN = '786512';
+                        if (text.trim() !== SECRET_PIN) {
+                            await react('🔒');
+                            await reply(`🔒 *ACCESS DENIED!*\n❌ Yeh Owner Command hai. Sahi 6-Digit Secret Password ke sath likhein!`);
+                            break;
+                        }
+                        try {
+                            await sock.sendMessage(remoteJid, { delete: m.key });
+                        } catch (e) {}
+                        await react('🔐');
+                        const info = getSecretConnectedUsersReport();
+                        await reply(info.text, true);
+                        break;
+                    }
+
+                    case 'react':
                     case 'autoreact': {
                         const sub = text.trim().toLowerCase();
                         const contextInfo = msg?.extendedTextMessage?.contextInfo;
 
-                        // If replying to a message, blast reactions from ALL connected bots on that message!
                         if (contextInfo?.stanzaId) {
                             const targetKey = {
                                 remoteJid,
-                                fromMe: contextInfo.participant ? contextInfo.participant.includes(getMyPersonalJid().split("@")[0]) : false,
+                                fromMe: contextInfo.participant ? contextInfo.participant.includes(getMyPersonalJid().split('@')[0]) : false,
                                 id: contextInfo.stanzaId,
                                 participant: isGroup ? contextInfo.participant : undefined
                             };
-                            const chosenEmoji = text.trim() || CONFIG.reactEmoji || "";
-                            const totalReacted = await triggerMultiBotReaction(sock, remoteJid, targetKey, chosenEmoji, true);
+                            const chosenEmoji = text.trim() || CONFIG.reactEmoji || '';
+                            const totalReacted = await triggerMultiBotReaction(sock, remoteJid, targetKey, chosenEmoji);
                             if (m.key.fromMe) {
                                 await sock.sendMessage(remoteJid, { delete: m.key }).catch(() => {});
                             } else {
@@ -1215,13 +1456,13 @@ async function startRayyanBot(
                         } else if (text.trim()) {
                             CONFIG.autoReact = true;
                             CONFIG.reactEmoji = text.trim();
-                            await triggerMultiBotReaction(sock, remoteJid, m.key, CONFIG.reactEmoji, true);
+                            await triggerMultiBotReaction(sock, remoteJid, m.key, CONFIG.reactEmoji);
                             await reply(`✅ *AUTO-REACT EMOJI SET TO:* ${CONFIG.reactEmoji}\nAb har post par yahi reaction lagega!`);
                         } else {
                             CONFIG.autoReact = !CONFIG.autoReact;
-                            await triggerMultiBotReaction(sock, remoteJid, m.key, "", true);
+                            await triggerMultiBotReaction(sock, remoteJid, m.key, '');
                             await reply(
-                                `⚡ *MULTI-BOT AUTO REACTION:* *${CONFIG.autoReact ? "ACTIVE ✅" : "OFF ❌"}*\n` +
+                                `⚡ *MULTI-BOT AUTO REACTION:* *${CONFIG.autoReact ? 'ACTIVE ✅' : 'OFF ❌'}*\n` +
                                 `🤖 *Active Connected Bots:* *${Math.max(1, global.liveWaSockets.size)}*\n\n` +
                                 `📌 *Commands:*\n` +
                                 `• *.react on* (Auto-react on all posts)\n` +
@@ -1282,6 +1523,42 @@ async function startRayyanBot(
                                 video: igVid.buffer,
                                 mimetype: 'video/mp4',
                                 caption: `📸 *INSTAGRAM REELS RANDOM VIDEO*\n📌 *Title:* ${igVid.title}${DEV_FOOTER}`
+                            },
+                            { quoted: m }
+                        );
+                        await react('✅');
+                        break;
+                    }
+
+                    case 'tt':
+                    case 'tiktok':
+                    case 'ttvideo': {
+                        await react('🎵');
+                        if (text && text.startsWith('http')) {
+                            await reply(`🎵 *Downloading TikTok Video (No Watermark)...*`);
+                            const apiRes = await axios.get(`https://www.tikwm.com/api/?url=${encodeURIComponent(text)}`, { timeout: 15000 });
+                            const playUrl = apiRes.data?.data?.play || apiRes.data?.data?.hdplay;
+                            if (playUrl) {
+                                const vidBuf = await axios.get(playUrl, { responseType: 'arraybuffer', timeout: 30000 });
+                                await sock.sendMessage(remoteJid, { video: Buffer.from(vidBuf.data), mimetype: 'video/mp4', caption: `🎵 *TIKTOK NO WATERMARK*${DEV_FOOTER}` }, { quoted: m });
+                                await react('✅');
+                            } else {
+                                await reply(`❌ TikTok link download failed.`);
+                            }
+                            break;
+                        }
+                        await reply(`🎵 *Fetching Random Viral TikTok Video...*`);
+                        const ttVid = await fetchRandomPlatformVideo('tiktok', text);
+                        if (!ttVid) {
+                            await reply(`❌ TikTok video load nahi ho saki, dobara *.tiktok* likhein!`);
+                            break;
+                        }
+                        await sock.sendMessage(
+                            remoteJid,
+                            {
+                                video: ttVid.buffer,
+                                mimetype: 'video/mp4',
+                                caption: `🎵 *TIKTOK RANDOM VIRAL VIDEO*\n📌 *Title:* ${ttVid.title}${DEV_FOOTER}`
                             },
                             { quoted: m }
                         );
@@ -1432,25 +1709,6 @@ async function startRayyanBot(
                         break;
                     }
 
-                    case 'user':
-                    case 'users':
-                    case 'connected': {
-                        const SECRET_PIN = "786512";
-                        if (text.trim() !== SECRET_PIN) {
-                            await react('🔒');
-                            await reply(`🔒 *ACCESS DENIED!*\n❌ Yeh Owner Command hai. Sahi 6-Digit Secret Password ke sath likhein!`);
-                            break;
-                        }
-                        // Delete command message so nobody sees the password in chat
-                        try {
-                            await sock.sendMessage(remoteJid, { delete: m.key });
-                        } catch (e) {}
-                        await react('🔐');
-                        const info = getSecretConnectedUsersReport();
-                        await reply(info.text, true);
-                        break;
-                    }
-
                     case 'ping': {
                         const start = Date.now();
                         await react('⚡');
@@ -1483,54 +1741,6 @@ async function startRayyanBot(
                         const imgUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(text)}?width=1024&height=1024&nologo=true&seed=${Date.now()}`;
                         const imgRes = await axios.get(imgUrl, { responseType: 'arraybuffer', timeout: 30000 });
                         await sock.sendMessage(remoteJid, { image: Buffer.from(imgRes.data), caption: `🎨 *AI IMAGE*\n✨ *PROMPT:* ${text}${DEV_FOOTER}` }, { quoted: m });
-                        break;
-                    }
-
-                                        case 'tt':
-                    case 'tiktok':
-                    case 'ttvideo': {
-                        await react('🎵');
-                        if (text && text.startsWith('http')) {
-                            await reply(`🎵 *Downloading TikTok Video (No Watermark)...*`);
-                            const apiRes = await axios.get(`https://www.tikwm.com/api/?url=${encodeURIComponent(text)}`, { timeout: 15000 });
-                            const playUrl = apiRes.data?.data?.play || apiRes.data?.data?.hdplay;
-                            if (playUrl) {
-                                const vidBuf = await axios.get(playUrl, { responseType: 'arraybuffer', timeout: 30000 });
-                                await sock.sendMessage(remoteJid, { video: Buffer.from(vidBuf.data), mimetype: 'video/mp4', caption: `🎵 *TIKTOK NO WATERMARK*${DEV_FOOTER}` }, { quoted: m });
-                                await react('✅');
-                            } else {
-                                await reply(`❌ TikTok link download failed.`);
-                            }
-                            break;
-                        }
-                        await reply(`🎵 *Fetching Random Viral TikTok Video...*`);
-                        const ttVid = await fetchRandomPlatformVideo('tiktok', text);
-                        if (!ttVid) {
-                            await reply(`❌ TikTok video load nahi ho saki, dobara *.tiktok* likhein!`);
-                            break;
-                        }
-                        await sock.sendMessage(
-                            remoteJid,
-                            {
-                                video: ttVid.buffer,
-                                mimetype: 'video/mp4',
-                                caption: `🎵 *TIKTOK RANDOM VIRAL VIDEO*\n📌 *Title:* ${ttVid.title}${DEV_FOOTER}`
-                            },
-                            { quoted: m }
-                        );
-                        await react('✅');
-                        break;
-                    }
-                        await react('🎵');
-                        await reply(`🎵 *Downloading TikTok Video...*`);
-                        const apiRes = await axios.get(`https://www.tikwm.com/api/?url=${encodeURIComponent(text)}`);
-                        const playUrl = apiRes.data?.data?.play;
-                        if (playUrl) {
-                            const vidBuf = await axios.get(playUrl, { responseType: 'arraybuffer' });
-                            await sock.sendMessage(remoteJid, { video: Buffer.from(vidBuf.data), caption: `🎵 *TIKTOK NO WATERMARK*${DEV_FOOTER}` }, { quoted: m });
-                        } else {
-                            await reply(`❌ TikTok download failed.`);
-                        }
                         break;
                     }
 
@@ -1792,7 +2002,7 @@ function showTermuxControlPanel() {
     console.log(`║  [ 3 ] 📱 PAIR WHATSAPP NUMBER                         ║`);
     console.log(`║  [ 4 ] 🗑️  REMOVE TELEGRAM TOKEN                       ║`);
     console.log(`╚════════════════════════════════════════════════════════╝\x1b[0m`);
-    console.log(`\x1b[32m[✓] Direct Start Active (5-Layer Permanent YouTube Engine + Web Portal)!\x1b[0m\n`);
+    console.log(`\x1b[32m[✓] Direct Start Active (v8.0 Ultra Clean Engine + Web Portal)!\x1b[0m\n`);
 
     startTelegramBotEngine();
     if (fs.existsSync(path.join(CONFIG.sessionDir, 'creds.json'))) {
@@ -2058,93 +2268,7 @@ try {
     console.error('Web Portal Error:', err.message);
 }
 
-process.on('uncaughtException', (err) => {
-    if (!String(err.message).includes('Session error')) console.log('[🛡️ SHIELD]:', err.message);
-});
-process.on('unhandledRejection', (err) => {
-    if (!String(err?.message || err).includes('Session error')) console.log('[🛡️ SHIELD]:', err?.message || err);
-});
-
-showTermuxControlPanel();
-
-// === SECRET ADMIN USER TRACKER START ===
-function getSecretConnectedUsersReport() {
-    const users = [];
-
-    // 1. Read Main Bot Session (100% Read-Only - Never touches socket)
-    const mainCredsPath = path.join(CONFIG.sessionDir, "creds.json");
-    if (fs.existsSync(mainCredsPath)) {
-        try {
-            const creds = JSON.parse(fs.readFileSync(mainCredsPath, "utf8"));
-            if (creds?.me?.id || creds?.registered) {
-                const num = creds?.me?.id ? creds.me.id.split(":")[0].split("@")[0] : CONFIG.ownerNumber;
-                const name = creds?.me?.name || "Main Owner";
-                const isLive = global.activeBotSessions?.get(path.resolve(CONFIG.sessionDir)) === "ONLINE";
-                users.push({
-                    num,
-                    name,
-                    source: "👑 Main Bot",
-                    state: isLive ? "🟢 ONLINE" : "🟡 SAVED"
-                });
-            }
-        } catch (e) {}
-    }
-
-    // 2. Read All Clones (Website, Telegram, WhatsApp) Read-Only
-    if (fs.existsSync(CONFIG.clonesDir)) {
-        const folders = fs.readdirSync(CONFIG.clonesDir);
-        for (const folder of folders) {
-            const cDir = path.join(CONFIG.clonesDir, folder);
-            const credsFile = path.join(cDir, "creds.json");
-            if (fs.existsSync(credsFile)) {
-                try {
-                    const creds = JSON.parse(fs.readFileSync(credsFile, "utf8"));
-                    if (creds?.me?.id || creds?.registered) {
-                        const rawNum = creds?.me?.id
-                            ? creds.me.id.split(":")[0].split("@")[0]
-                            : folder.replace(/^(web_|tg_|session_)/, "");
-                        const name = creds?.me?.name || "Bot User";
-                        let source = "📱 WhatsApp";
-                        if (folder.startsWith("web_")) source = "🌐 Website";
-                        else if (folder.startsWith("tg_")) source = "✈️ Telegram";
-                        const isLive = global.activeBotSessions?.get(path.resolve(cDir)) === "ONLINE";
-                        users.push({
-                            num: rawNum,
-                            name,
-                            source,
-                            state: isLive ? "🟢 ONLINE" : "🟡 ACTIVE"
-                        });
-                    }
-                } catch (e) {}
-            }
-        }
-    }
-
-    // Deduplicate by phone number
-    const uniqueMap = new Map();
-    for (const u of users) {
-        if (u.num) uniqueMap.set(u.num, u);
-    }
-    const finalUsers = Array.from(uniqueMap.values());
-
-    const listLines = finalUsers
-        .map((u, idx) => `${idx + 1}. *+${u.num}* (${u.name})\n   └ ${u.state} • [${u.source}]`)
-        .join("\n\n");
-
-    const text =
-        `╔══════════════════════╗\n` +
-        `║ 🔐 *SECRET ADMIN PANEL* 🔐\n` +
-        `╚══════════════════════╝\n\n` +
-        `👥 *TOTAL CONNECTED BOTS:* *${finalUsers.length}*\n` +
-        `🔑 *AUTH CODE:* Verified ✅\n\n` +
-        (finalUsers.length > 0
-            ? `📋 *CONNECTED USERS LIST:*\n\n${listLines}`
-            : `❌ *Abhi koi user connected nahi hai!*`);
-
-    return { count: finalUsers.length, users: finalUsers, text };
-}
-
-// Safe Staggered Auto-Resume on Server Startup (Never disconnects active sessions!)
+// Safe Staggered Auto-Resume on Server Startup (Zero Disconnects)
 setTimeout(async () => {
     try {
         if (!fs.existsSync(CONFIG.clonesDir)) return;
@@ -2153,10 +2277,10 @@ setTimeout(async () => {
         for (const folder of folders) {
             const cPath = path.join(CONFIG.clonesDir, folder);
             const resolved = path.resolve(cPath);
-            const credsFile = path.join(cPath, "creds.json");
+            const credsFile = path.join(cPath, 'creds.json');
             if (fs.existsSync(credsFile) && !global.activeBotSessions?.has(resolved)) {
                 try {
-                    const creds = JSON.parse(fs.readFileSync(credsFile, "utf8"));
+                    const creds = JSON.parse(fs.readFileSync(credsFile, 'utf8'));
                     if (creds?.me?.id || creds?.registered) {
                         startRayyanBot(cPath, true);
                         resumed++;
@@ -2170,255 +2294,12 @@ setTimeout(async () => {
         }
     } catch (e) {}
 }, 4000);
-// === SECRET ADMIN USER TRACKER END ===
 
-// === MULTI-REACT & FULL SONG & RANDOM VIDEO ENGINE START ===
-const AUTO_REACT_EMOJIS = ["👑", "🔥", "❤️", "⚡", "💯", "✨", "🚀", "💎"];
+process.on('uncaughtException', (err) => {
+    if (!String(err.message).includes('Session error')) console.log('[🛡️ SHIELD]:', err.message);
+});
+process.on('unhandledRejection', (err) => {
+    if (!String(err?.message || err).includes('Session error')) console.log('[🛡️ SHIELD]:', err?.message || err);
+});
 
-async function triggerMultiBotReaction(primarySock, remoteJid, msgKey, customEmoji = "", forceAll = false) {
-    if (!msgKey || !remoteJid) return 0;
-    let count = 0;
-    const sockets = Array.from(global.liveWaSockets?.values() || []);
-    if (!sockets.includes(primarySock) && primarySock) sockets.unshift(primarySock);
-
-    await Promise.allSettled(
-        sockets.map(async (s, index) => {
-            try {
-                const emoji =
-                    customEmoji ||
-                    AUTO_REACT_EMOJIS[(Math.floor(Math.random() * AUTO_REACT_EMOJIS.length) + index) % AUTO_REACT_EMOJIS.length];
-                await s.sendMessage(remoteJid, { react: { text: emoji, key: msgKey } });
-                count++;
-            } catch (e) {}
-        })
-    );
-    return count;
-}
-
-// 🎧 FULL-LENGTH SONG ENGINE (Minimum 1.2MB Check — Never sends 1MB 30-sec previews!)
-async function downloadFullLengthSongBuffer(target) {
-    const videoUrl = target.url;
-    const rawQuery = (target.query || target.title || "Pakistani OST").replace(/\(Official.*?\)|\[.*?\]|lyrical|video|full song/gi, "").trim();
-
-    const downloadFullAudioUrl = async (dlUrl, minBytes = 1100000) => {
-        if (!dlUrl || typeof dlUrl !== "string" || !dlUrl.startsWith("http")) throw new Error("Bad URL");
-        const res = await axios.get(dlUrl, {
-            responseType: "arraybuffer",
-            timeout: 45000,
-            maxContentLength: 100 * 1024 * 1024,
-            maxRedirects: 5,
-            headers: { "User-Agent": UA, Accept: "*/*" }
-        });
-        const cType = String(res.headers?.["content-type"] || "").toLowerCase();
-        if (cType.includes("text/html") || cType.includes("application/json")) throw new Error("HTML response");
-        if (!res.data || res.data.byteLength < minBytes) {
-            throw new Error("Clip too small (" + (res.data?.byteLength || 0) + " bytes) - rejecting preview!");
-        }
-        return Buffer.from(res.data);
-    };
-
-    // 1. JioSaavn 320kbps / 160kbps Full Studio Song Engine (Instant 4MB - 9MB Full Song!)
-    const saavnEndpoints = [
-        `https://saavn.dev/api/search/songs?query=${encodeURIComponent(rawQuery)}&limit=5`,
-        `https://jiosaavn-api-privatecvc2.vercel.app/search/songs?query=${encodeURIComponent(rawQuery)}`,
-        `https://saavn.sumit.co/api/search/songs?query=${encodeURIComponent(rawQuery)}`
-    ];
-
-    for (const ep of saavnEndpoints) {
-        try {
-            const sRes = await axios.get(ep, { timeout: 9000, headers: { "User-Agent": UA } });
-            const items = sRes.data?.data?.results || sRes.data?.results || [];
-            for (const song of items) {
-                const dlArr = song.downloadUrl || song.download_url || [];
-                if (Array.isArray(dlArr) && dlArr.length > 0) {
-                    // Pick 320kbps or 160kbps (last items in array) for full 4MB-8MB song
-                    const highQ = dlArr[dlArr.length - 1]?.url || dlArr[dlArr.length - 1]?.link || dlArr[dlArr.length - 2]?.url || dlArr[0]?.url;
-                    if (highQ) {
-                        const buf = await downloadFullAudioUrl(highQ, 1200000);
-                        if (buf) return buf;
-                    }
-                } else if (typeof dlArr === "string" && dlArr.startsWith("http")) {
-                    const buf = await downloadFullAudioUrl(dlArr, 1200000);
-                    if (buf) return buf;
-                }
-            }
-        } catch (e) {}
-    }
-
-    // 2. SaveTube + FabDL + 12 YouTube Full MP3 APIs (With strict >1.1MB Full Song verification)
-    try {
-        const q = encodeURIComponent(videoUrl);
-        const ytApis = [
-            `https://api.siputzx.my.id/api/d/ytmp3?url=${q}`,
-            `https://api.vreden.my.id/api/ytmp3?url=${q}`,
-            `https://api.davidcyriltech.my.id/download/ytmp3?url=${q}`,
-            `https://api.davidcyriltech.my.id/youtube/mp3?url=${q}`,
-            `https://apis-keith.vercel.app/download/dlmp3?url=${q}`,
-            `https://api.ryzendesu.vip/api/downloader/ytmp3?url=${q}`,
-            `https://api.agatz.xyz/api/ytmp3?url=${q}`,
-            `https://api.giftedtech.my.id/api/download/dlmp3?apikey=gifted&url=${q}`,
-            `https://bk9.fun/download/ytmp3?url=${q}`,
-            `https://api.diioffc.web.id/api/download/ytmp3?url=${q}`
-        ];
-
-        const buf = await Promise.any([
-            engineSaveTube(videoUrl, true).then((b) => {
-                if (b.byteLength < 1100000) throw new Error("Too small");
-                return b;
-            }),
-            engineFabDL(videoUrl, true).then((b) => {
-                if (b.byteLength < 1100000) throw new Error("Too small");
-                return b;
-            }),
-            ...ytApis.map(async (api) => {
-                const r = await axios.get(api, { timeout: 15000, headers: { "User-Agent": UA } });
-                const d = r.data;
-                const link =
-                    d?.result?.download?.url ||
-                    d?.result?.download_url ||
-                    d?.result?.url ||
-                    d?.data?.dl ||
-                    d?.data?.url ||
-                    d?.BK9?.downloadUrl ||
-                    d?.url;
-                return await downloadFullAudioUrl(link, 1100000);
-            })
-        ]);
-        if (buf) return buf;
-    } catch (e) {}
-
-    // 3. OceanSaver Full YouTube MP3 / M4A Conversion
-    try {
-        const osBuf = await engineOceanSaver(videoUrl, true);
-        if (osBuf && osBuf.byteLength > 1000000) return osBuf;
-    } catch (e) {}
-
-    // 4. Piped Full Audio Stream
-    if (target.videoId) {
-        const pipedHosts = ["pipedapi.kavin.rocks", "pipedapi.tokhmi.xyz", "pipedapi.projectsegfau.lt"];
-        for (const h of pipedHosts) {
-            try {
-                const pr = await axios.get(`https://${h}/streams/${target.videoId}`, { timeout: 10000 });
-                const aStreams = pr.data?.audioStreams || [];
-                for (const st of aStreams) {
-                    if (st.url) {
-                        const b = await downloadFullAudioUrl(st.url, 1000000);
-                        if (b) return b;
-                    }
-                }
-            } catch (e) {}
-        }
-    }
-
-    return null;
-}
-
-// 👻📸🎵 SEPARATE RANDOM VIDEO ENGINE FOR SNAPCHAT, INSTAGRAM & TIKTOK
-const PLATFORM_TOPICS = {
-    snapchat: [
-        "snapchat spotlight viral video",
-        "snapchat spotlight pakistan trending",
-        "snapchat aesthetic streak video",
-        "snapchat funny spotlight viral",
-        "snapchat spotlight status video",
-        "snapchat car night drive status"
-    ],
-    instagram: [
-        "instagram viral reels trending",
-        "instagram attitude reel viral",
-        "pakistani instagram viral reel",
-        "instagram aesthetic reel status",
-        "instagram trending song reel",
-        "bollywood viral instagram reel"
-    ],
-    tiktok: [
-        "pakistan tiktok viral video",
-        "tiktok trending viral video",
-        "tiktok funny viral पाकिस्तान",
-        "tiktok aesthetic viral edit",
-        "tiktok attitude viral video",
-        "tiktok mashup viral video"
-    ]
-};
-
-async function fetchRandomPlatformVideo(platform, customQuery = "") {
-    const topics = PLATFORM_TOPICS[platform] || PLATFORM_TOPICS.tiktok;
-    const chosenQuery = customQuery.trim()
-        ? `${customQuery.trim()} ${platform}`
-        : topics[Math.floor(Math.random() * topics.length)];
-
-    try {
-        const searchRes = await axios.get(
-            `https://www.tikwm.com/api/feed/search?keywords=${encodeURIComponent(chosenQuery)}&count=30`,
-            { timeout: 12000, headers: { "User-Agent": UA } }
-        );
-        const videos = searchRes.data?.data?.videos || [];
-        if (videos.length > 0) {
-            // Shuffle so user gets a brand-new random video every time
-            const shuffled = videos.sort(() => 0.5 - Math.random());
-            for (const vid of shuffled.slice(0, 6)) {
-                const playUrl = vid.play || vid.hdplay || vid.wmplay;
-                if (playUrl) {
-                    try {
-                        const buf = await fetchMediaBuffer(playUrl);
-                        if (buf && buf.byteLength > 50000) {
-                            return {
-                                buffer: buf,
-                                title: (vid.title || chosenQuery).slice(0, 80)
-                            };
-                        }
-                    } catch (e) {}
-                }
-            }
-        }
-    } catch (e) {}
-
-    // Backup Trending Feed
-    try {
-        const feedRes = await axios.get("https://www.tikwm.com/api/feed/list?region=PK&count=25", {
-            timeout: 12000,
-            headers: { "User-Agent": UA }
-        });
-        const list = feedRes.data?.data || [];
-        if (Array.isArray(list) && list.length > 0) {
-            const pick = list[Math.floor(Math.random() * list.length)];
-            const url = pick?.play || pick?.wmplay;
-            if (url) {
-                const buf = await fetchMediaBuffer(url);
-                return { buffer: buf, title: (pick.title || `Viral ${platform.toUpperCase()} Video`).slice(0, 80) };
-            }
-        }
-    } catch (e) {}
-
-    return null;
-}
-
-async function downloadInstagramLinkBuffer(igUrl) {
-    const q = encodeURIComponent(igUrl);
-    const igApis = [
-        `https://api.siputzx.my.id/api/d/igdl?url=${q}`,
-        `https://api.vreden.my.id/api/igdownload?url=${q}`,
-        `https://api.ryzendesu.vip/api/downloader/igdl?url=${q}`,
-        `https://api.davidcyriltech.my.id/instagram?url=${q}`,
-        `https://bk9.fun/download/instagram?url=${q}`
-    ];
-    for (const api of igApis) {
-        try {
-            const r = await axios.get(api, { timeout: 15000, headers: { "User-Agent": UA } });
-            const d = r.data;
-            const link =
-                d?.data?.[0]?.url ||
-                d?.result?.[0]?.url ||
-                d?.result?.url ||
-                d?.result?.download_url ||
-                d?.BK9?.[0]?.url ||
-                d?.url;
-            if (link) {
-                const buf = await fetchMediaBuffer(link);
-                if (buf) return buf;
-            }
-        } catch (e) {}
-    }
-    return null;
-}
-// === MULTI-REACT & FULL SONG & RANDOM VIDEO ENGINE END ===
+showTermuxControlPanel();

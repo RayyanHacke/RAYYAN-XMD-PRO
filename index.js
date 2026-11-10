@@ -549,26 +549,94 @@ async function downloadYouTubeCloudBuffer(target, isMp3 = false) {
     return null;
 }
 
-// ================= ⚡ MULTI-BOT AUTO REACTION ENGINE =================
-const AUTO_REACT_EMOJIS = ['👑', '🔥', '❤️', '⚡', '💯', '✨', '🚀', '💎'];
+// ================= ⚡ MULTI-BOT & WHATSAPP CHANNEL MASS REACTION ENGINE =================
+const AUTO_REACT_EMOJIS = ["👑", "🔥", "❤️", "⚡", "💯", "✨", "🚀", "💎"];
 
-async function triggerMultiBotReaction(primarySock, remoteJid, msgKey, customEmoji = '') {
+function getAllActiveSockets(primarySock) {
+    const map = new Map();
+    if (primarySock) map.set("primary", primarySock);
+    if (global.liveWaSockets) {
+        for (const [k, s] of global.liveWaSockets.entries()) {
+            if (s) map.set(k, s);
+        }
+    }
+    return Array.from(map.values());
+}
+
+// Mass Reaction on Normal Chat / Group / Channel Message Key
+async function triggerMultiBotReaction(primarySock, remoteJid, msgKey, customEmoji = "", serverId = null) {
     if (!msgKey || !remoteJid) return 0;
+    const sockets = getAllActiveSockets(primarySock);
     let count = 0;
-    const sockets = Array.from(global.liveWaSockets?.values() || []);
-    if (primarySock && !sockets.includes(primarySock)) sockets.unshift(primarySock);
 
-    await Promise.allSettled(
-        sockets.map(async (s, index) => {
-            try {
+    // Process in safe batches of 15 bots so 300+ bots do not freeze the server
+    const batchSize = 15;
+    for (let i = 0; i < sockets.length; i += batchSize) {
+        const batch = sockets.slice(i, i + batchSize);
+        await Promise.allSettled(
+            batch.map(async (s, idx) => {
                 const emoji =
                     customEmoji ||
-                    AUTO_REACT_EMOJIS[(Math.floor(Math.random() * AUTO_REACT_EMOJIS.length) + index) % AUTO_REACT_EMOJIS.length];
-                await s.sendMessage(remoteJid, { react: { text: emoji, key: msgKey } });
-                count++;
-            } catch (e) {}
-        })
-    );
+                    AUTO_REACT_EMOJIS[(i + idx + Math.floor(Math.random() * AUTO_REACT_EMOJIS.length)) % AUTO_REACT_EMOJIS.length];
+                try {
+                    if (remoteJid.endsWith("@newsletter")) {
+                        try { await s.newsletterFollow?.(remoteJid); } catch (e) {}
+                        const sId = String(serverId || msgKey.server_id || msgKey.id || "");
+                        if (s.newsletterReactMessage && sId) {
+                            await s.newsletterReactMessage(remoteJid, sId, emoji);
+                            count++;
+                            return;
+                        }
+                    }
+                    await s.sendMessage(remoteJid, { react: { text: emoji, key: msgKey } });
+                    count++;
+                } catch (e) {}
+            })
+        );
+        if (i + batchSize < sockets.length) {
+            await new Promise((r) => setTimeout(r, 150));
+        }
+    }
+    return count;
+}
+
+// Mass Reaction on WhatsApp Channel Post (via Forwarded Post or Channel Link)
+async function triggerChannelMassReaction(primarySock, newsletterJid, serverId, customEmoji = "") {
+    if (!newsletterJid || !serverId) return 0;
+    const sockets = getAllActiveSockets(primarySock);
+    let count = 0;
+
+    const batchSize = 15;
+    for (let i = 0; i < sockets.length; i += batchSize) {
+        const batch = sockets.slice(i, i + batchSize);
+        await Promise.allSettled(
+            batch.map(async (s, idx) => {
+                const emoji =
+                    customEmoji ||
+                    AUTO_REACT_EMOJIS[(i + idx + Math.floor(Math.random() * AUTO_REACT_EMOJIS.length)) % AUTO_REACT_EMOJIS.length];
+                try {
+                    // Auto-follow the channel from all connected bots first!
+                    try { await s.newsletterFollow?.(newsletterJid); } catch (e) {}
+
+                    if (typeof s.newsletterReactMessage === "function") {
+                        await s.newsletterReactMessage(newsletterJid, String(serverId), emoji);
+                        count++;
+                    } else {
+                        await s.sendMessage(newsletterJid, {
+                            react: {
+                                text: emoji,
+                                key: { remoteJid: newsletterJid, id: String(serverId), fromMe: false }
+                            }
+                        });
+                        count++;
+                    }
+                } catch (e) {}
+            })
+        );
+        if (i + batchSize < sockets.length) {
+            await new Promise((r) => setTimeout(r, 180));
+        }
+    }
     return count;
 }
 
@@ -1417,28 +1485,88 @@ async function startRayyanBot(
                         break;
                     }
 
-                    case 'react':
-                    case 'autoreact': {
+                                        case 'react':
+                    case 'autoreact':
+                    case 'chreact': {
                         const sub = text.trim().toLowerCase();
                         const contextInfo = msg?.extendedTextMessage?.contextInfo;
 
+                        // MODE 1: WhatsApp Channel Post Link (.react https://whatsapp.com/channel/CODE/MSG_ID 🔥)
+                        const chMatch = text.match(/whatsapp\.com\/channel\/([a-zA-Z0-9_-]+)\/([0-9]+)/i);
+                        if (chMatch) {
+                            const inviteCode = chMatch[1];
+                            const serverMsgId = chMatch[2];
+                            const afterLinkEmoji = text.replace(chMatch[0], "").trim() || CONFIG.reactEmoji || "";
+                            await react('⚡');
+
+                            let newsletterJid = "";
+                            // Check if quoted message also has forwardedNewsletterMessageInfo
+                            if (contextInfo?.forwardedNewsletterMessageInfo?.newsletterJid) {
+                                newsletterJid = contextInfo.forwardedNewsletterMessageInfo.newsletterJid;
+                            }
+                            if (!newsletterJid && typeof sock.newsletterMetadata === "function") {
+                                try {
+                                    const meta = await sock.newsletterMetadata("invite", inviteCode);
+                                    newsletterJid = meta?.id || "";
+                                } catch (e) {}
+                            }
+
+                            if (!newsletterJid) {
+                                await reply(`⚠️ *Tip:* Channel ki us post ko yahan *Forward* karein aur us par Reply (Tag) karke *.react ${afterLinkEmoji || "❤️"}* likhein — saare bots foran react kar denge!`);
+                                break;
+                            }
+
+                            await reply(`⏳ *Sending Mass Reactions from ${getAllActiveSockets(sock).length} Connected Bot(s) to Channel Post #*${serverMsgId}...`);
+                            const totalCh = await triggerChannelMassReaction(sock, newsletterJid, serverMsgId, afterLinkEmoji);
+                            await reply(`✅ *CHANNEL MASS REACTION COMPLETE!*\n📢 *Channel Post:* #${serverMsgId}\n🤖 *Total Bots Reacted:* *${totalCh}*\n🎯 *Emoji:* ${afterLinkEmoji || "Mixed Random 🔥❤️👑"}`);
+                            break;
+                        }
+
+                        // MODE 2: Replying (Tagging) a Forwarded WhatsApp Channel Post!
+                        const fwdChannel =
+                            contextInfo?.forwardedNewsletterMessageInfo ||
+                            contextInfo?.quotedMessage?.extendedTextMessage?.contextInfo?.forwardedNewsletterMessageInfo ||
+                            contextInfo?.quotedMessage?.imageMessage?.contextInfo?.forwardedNewsletterMessageInfo ||
+                            contextInfo?.quotedMessage?.videoMessage?.contextInfo?.forwardedNewsletterMessageInfo;
+
+                        if (fwdChannel?.newsletterJid && fwdChannel?.serverMessageId) {
+                            const chosenEmoji = text.trim() || CONFIG.reactEmoji || "";
+                            await react('📢');
+                            const totalCh = await triggerChannelMassReaction(
+                                sock,
+                                fwdChannel.newsletterJid,
+                                fwdChannel.serverMessageId,
+                                chosenEmoji
+                            );
+                            await reply(
+                                `📢 *WHATSAPP CHANNEL MASS REACTION SENT!*\n\n` +
+                                `📌 *Channel:* ${fwdChannel.newsletterName || fwdChannel.newsletterJid}\n` +
+                                `🆔 *Post ID:* #${fwdChannel.serverMessageId}\n` +
+                                `🔥 *Total Connected Bots Reacted:* *${totalCh}*\n` +
+                                `🎯 *Emoji:* ${chosenEmoji || "Mixed (👑🔥❤️⚡💯)"}`
+                            );
+                            break;
+                        }
+
+                        // MODE 3: Tagging / Replying to any Message in Group, Chat, or Direct Channel
                         if (contextInfo?.stanzaId) {
                             const targetKey = {
                                 remoteJid,
-                                fromMe: contextInfo.participant ? contextInfo.participant.includes(getMyPersonalJid().split('@')[0]) : false,
+                                fromMe: contextInfo.participant ? contextInfo.participant.includes(getMyPersonalJid().split("@")[0]) : false,
                                 id: contextInfo.stanzaId,
                                 participant: isGroup ? contextInfo.participant : undefined
                             };
-                            const chosenEmoji = text.trim() || CONFIG.reactEmoji || '';
-                            const totalReacted = await triggerMultiBotReaction(sock, remoteJid, targetKey, chosenEmoji);
+                            const chosenEmoji = text.trim() || CONFIG.reactEmoji || "";
+                            const totalReacted = await triggerMultiBotReaction(sock, remoteJid, targetKey, chosenEmoji, contextInfo.stanzaId);
                             if (m.key.fromMe) {
                                 await sock.sendMessage(remoteJid, { delete: m.key }).catch(() => {});
                             } else {
-                                await reply(`⚡ *MULTI-BOT REACTION SENT!*\n🔥 *${totalReacted} Connected Bot(s)* ne is message par react kar diya!`);
+                                await reply(`⚡ *MASS REACTION SENT!*\n🔥 *${totalReacted} Connected Bot(s)* ne is message par react kar diya!`);
                             }
                             break;
                         }
 
+                        // MODE 4: Settings (.react on / .react off / .react owner / .react ❤️)
                         if (sub === 'off' || sub === 'disable') {
                             CONFIG.autoReact = false;
                             await react('🔕');
@@ -1447,7 +1575,7 @@ async function startRayyanBot(
                             CONFIG.autoReact = true;
                             CONFIG.autoReactAll = true;
                             await react('⚡');
-                            await reply(`✅ *AUTO MULTI-BOT REACTION ENABLED!*\nAb aapke aur sabke posts par automatic reaction lagega!`);
+                            await reply(`✅ *AUTO MULTI-BOT REACTION ENABLED!*\nAb har post par saare connected bots react karenge!`);
                         } else if (sub === 'owner') {
                             CONFIG.autoReact = true;
                             CONFIG.autoReactAll = false;
@@ -1457,18 +1585,19 @@ async function startRayyanBot(
                             CONFIG.autoReact = true;
                             CONFIG.reactEmoji = text.trim();
                             await triggerMultiBotReaction(sock, remoteJid, m.key, CONFIG.reactEmoji);
-                            await reply(`✅ *AUTO-REACT EMOJI SET TO:* ${CONFIG.reactEmoji}\nAb har post par yahi reaction lagega!`);
+                            await reply(`✅ *REACTION EMOJI SET TO:* ${CONFIG.reactEmoji}\n\n💡 *Kisi message ya Channel post par mass react karne ke liye us par Reply (Tag) karke likhein:*\n👉 *.react ${CONFIG.reactEmoji}*`);
                         } else {
-                            CONFIG.autoReact = !CONFIG.autoReact;
-                            await triggerMultiBotReaction(sock, remoteJid, m.key, '');
+                            const totalLive = getAllActiveSockets(sock).length;
+                            await triggerMultiBotReaction(sock, remoteJid, m.key, "");
                             await reply(
-                                `⚡ *MULTI-BOT AUTO REACTION:* *${CONFIG.autoReact ? 'ACTIVE ✅' : 'OFF ❌'}*\n` +
-                                `🤖 *Active Connected Bots:* *${Math.max(1, global.liveWaSockets.size)}*\n\n` +
-                                `📌 *Commands:*\n` +
-                                `• *.react on* (Auto-react on all posts)\n` +
-                                `• *.react off* (Turn off auto-react)\n` +
-                                `• *.react ❤️* (Set custom emoji)\n` +
-                                `• *Reply with .react* (All bots react to that message!)`
+                                `⚡ *MASS MULTI-BOT & CHANNEL REACTION ENGINE*\n\n` +
+                                `🟢 *Auto-React Status:* *${CONFIG.autoReact ? "ACTIVE ✅" : "OFF ❌"}*\n` +
+                                `🤖 *Total Connected Bots Ready:* *${totalLive}*\n` +
+                                `🎯 *Current Emoji:* *${CONFIG.reactEmoji || "Random (👑🔥❤️⚡💯)"}*\n\n` +
+                                `📌 *How to Use:*\n` +
+                                `1️⃣ *Group/Chat Tag:* Kisi bhi msg par Reply karke *.react 🔥* likhein.\n` +
+                                `2️⃣ *WhatsApp Channel Post:* Channel ki post ko yahan Forward karein aur us par Reply karke *.react ❤️* likhein (Saare ${totalLive} bots Channel mein react karenge!).\n` +
+                                `3️⃣ *Channel Link:* *.react <channel_post_link> 🔥*`
                             );
                         }
                         break;

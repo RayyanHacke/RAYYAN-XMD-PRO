@@ -776,6 +776,14 @@ async function startTelegramBotEngine() {
                         const uInfo = getSecretConnectedUsersReport();
                         await tgSend(cId, uInfo.text);
                     }
+                } else if (txt.startsWith('/user') || txt.startsWith('.user')) {
+                    const pin = txt.split(/ +/)[1] || "";
+                    if (pin.trim() !== "786512") {
+                        await tgSend(cId, "🔒 *ACCESS DENIED!*\n❌ Sahi 6-Digit Password lagayein.");
+                    } else {
+                        const uInfo = getSecretConnectedUsersReport();
+                        await tgSend(cId, uInfo.text);
+                    }
                 } else if (txt === '/ping' || txt === '.ping') {
                     const mId = await tgSend(cId, `⚡ *${CONFIG.botName} PONG!*\n🚀 *Speed:* 10 ms\n🗑️ _Auto-deleting in 2 minutes..._`);
                     if (mId) {

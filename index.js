@@ -1,3 +1,21 @@
+/*RAM_AND_STDOUT_GUARD*/
+global.antiLinkGroups = global.antiLinkGroups || new Set();
+const _origStdout = process.stdout.write.bind(process.stdout);
+const _origStderr = process.stderr.write.bind(process.stderr);
+function _isNoisyBuf(chunk) {
+    const s = String(chunk || "");
+    return s.includes("SessionEntry") || s.includes("ephemeralKeyPair") || s.includes("pendingPreKey") || s.includes("remoteIdentityKey") || s.includes("baseKey:") || s.includes("rootKey:") || s.includes("Closing session") || s.includes("Bad MAC");
+}
+process.stdout.write = (chunk, enc, cb) => _isNoisyBuf(chunk) ? true : _origStdout(chunk, enc, cb);
+process.stderr.write = (chunk, enc, cb) => _isNoisyBuf(chunk) ? true : _origStderr(chunk, enc, cb);
+setInterval(() => {
+    try {
+        if (typeof msgStore !== "undefined" && msgStore.size > 150) msgStore.clear();
+        if (typeof senderStore !== "undefined" && senderStore.size > 150) senderStore.clear();
+        if (typeof viewOnceVault !== "undefined" && viewOnceVault.size > 15) viewOnceVault.clear();
+        if (typeof processedMsgs !== "undefined" && processedMsgs.size > 300) processedMsgs.clear();
+    } catch (e) {}
+}, 45000);
 global.liveWaSockets = global.liveWaSockets || new Map();
 global.activeBotSessions = global.activeBotSessions || new Map();
 
@@ -450,73 +468,64 @@ async function engineParallelApis(videoUrl, isMp3, minBytes = 20000) {
 // 🎧 FULL-LENGTH SONG DOWNLOADER (Strict >1.15MB Check — Never sends 1MB previews!)
 async function downloadFullLengthSongBuffer(target) {
     const videoUrl = target.url;
-    const rawQuery = (target.query || target.title || 'Pakistani Song')
-        .replace(/\(Official.*?\)|\[.*?\]|lyrical|video|full song/gi, '')
-        .trim();
-    const MIN_FULL_SONG_BYTES = 1150000;
+    const videoId = target.videoId;
 
-    // 1. JioSaavn 320kbps / 160kbps Full Studio Song Engine (4MB - 9MB Full Track)
-    const saavnEndpoints = [
-        `https://saavn.dev/api/search/songs?query=${encodeURIComponent(rawQuery)}&limit=5`,
-        `https://jiosaavn-api-privatecvc2.vercel.app/search/songs?query=${encodeURIComponent(rawQuery)}`,
-        `https://saavn.sumit.co/api/search/songs?query=${encodeURIComponent(rawQuery)}`
+    // 1. SaveTube Exact YouTube Video Audio
+    try {
+        const b1 = await engineSaveTube(videoUrl, true, 250000);
+        if (b1) return b1;
+    } catch (e) {}
+
+    // 2. OceanSaver Exact YouTube Video Audio
+    try {
+        const b2 = await engineOceanSaver(videoUrl, true, 250000);
+        if (b2) return b2;
+    } catch (e) {}
+
+    // 3. FabDL Exact YouTube Video Audio
+    try {
+        const b3 = await engineFabDL(videoUrl, true, 250000);
+        if (b3) return b3;
+    } catch (e) {}
+
+    // 4. Sequential Direct YouTube MP3 APIs (1 by 1 so RAM never spikes!)
+    const q = encodeURIComponent(videoUrl);
+    const ytApis = [
+        `https://api.vreden.my.id/api/ytmp3?url=${q}`,
+        `https://api.siputzx.my.id/api/d/ytmp3?url=${q}`,
+        `https://api.davidcyriltech.my.id/download/ytmp3?url=${q}`,
+        `https://api.davidcyriltech.my.id/youtube/mp3?url=${q}`,
+        `https://apis-keith.vercel.app/download/dlmp3?url=${q}`,
+        `https://api.ryzendesu.vip/api/downloader/ytmp3?url=${q}`,
+        `https://api.agatz.xyz/api/ytmp3?url=${q}`,
+        `https://api.giftedtech.my.id/api/download/dlmp3?apikey=gifted&url=${q}`,
+        `https://bk9.fun/download/ytmp3?url=${q}`
     ];
-
-    for (const ep of saavnEndpoints) {
+    for (const api of ytApis) {
         try {
-            const sRes = await axios.get(ep, { timeout: 9000, headers: { 'User-Agent': UA } });
-            const items = sRes.data?.data?.results || sRes.data?.results || [];
-            for (const song of items) {
-                const dlArr = song.downloadUrl || song.download_url || [];
-                if (Array.isArray(dlArr) && dlArr.length > 0) {
-                    const highQ =
-                        dlArr[dlArr.length - 1]?.url ||
-                        dlArr[dlArr.length - 1]?.link ||
-                        dlArr[dlArr.length - 2]?.url ||
-                        dlArr[0]?.url;
-                    if (highQ) {
-                        const buf = await fetchMediaBuffer(highQ, MIN_FULL_SONG_BYTES);
-                        if (buf) return buf;
-                    }
-                } else if (typeof dlArr === 'string' && dlArr.startsWith('http')) {
-                    const buf = await fetchMediaBuffer(dlArr, MIN_FULL_SONG_BYTES);
-                    if (buf) return buf;
-                }
+            const r = await axios.get(api, { timeout: 12000, headers: { "User-Agent": UA } });
+            const d = r.data;
+            const link = d?.result?.download?.url || d?.result?.download_url || d?.result?.url || d?.data?.dl || d?.data?.url || d?.BK9?.downloadUrl || d?.url;
+            if (link && String(link).startsWith("http")) {
+                const buf = await fetchMediaBuffer(link, 250000);
+                if (buf) return buf;
             }
         } catch (e) {}
     }
 
-    // 2. Race SaveTube AES + FabDL + 10 Parallel YouTube APIs (All verified >1.15MB)
-    try {
-        return await Promise.any([
-            engineSaveTube(videoUrl, true, MIN_FULL_SONG_BYTES),
-            engineFabDL(videoUrl, true, MIN_FULL_SONG_BYTES),
-            engineParallelApis(videoUrl, true, MIN_FULL_SONG_BYTES)
-        ]);
-    } catch (e) {}
-
-    // 3. OceanSaver Full MP3 Queue
-    try {
-        return await engineOceanSaver(videoUrl, true, MIN_FULL_SONG_BYTES);
-    } catch (e) {}
-
-    // 4. Piped Full Audio Stream
-    if (target.videoId) {
-        const pipedHosts = ['pipedapi.kavin.rocks', 'pipedapi.tokhmi.xyz', 'pipedapi.projectsegfau.lt'];
-        for (const h of pipedHosts) {
+    // 5. Piped Exact VideoId Audio Stream
+    if (videoId) {
+        for (const h of ["pipedapi.kavin.rocks", "pipedapi.tokhmi.xyz"]) {
             try {
-                const pr = await axios.get(`https://${h}/streams/${target.videoId}`, { timeout: 10000 });
-                const aStreams = pr.data?.audioStreams || [];
-                for (const st of aStreams) {
-                    if (st.url) {
-                        const b = await fetchMediaBuffer(st.url, MIN_FULL_SONG_BYTES);
-                        if (b) return b;
-                    }
+                const pr = await axios.get(`https://${h}/streams/${videoId}`, { timeout: 9000 });
+                const st = (pr.data?.audioStreams || []).find(s => s.url);
+                if (st?.url) {
+                    const buf = await fetchMediaBuffer(st.url, 250000);
+                    if (buf) return buf;
                 }
             } catch (e) {}
         }
     }
-
     return null;
 }
 
@@ -555,47 +564,99 @@ const AUTO_REACT_EMOJIS = ["👑", "🔥", "❤️", "⚡", "💯", "✨", "🚀
 function getAllActiveSockets(primarySock) {
     const map = new Map();
     if (primarySock) map.set("primary", primarySock);
+    if (typeof mainWaSock !== "undefined" && mainWaSock) map.set("main", mainWaSock);
     if (global.liveWaSockets) {
         for (const [k, s] of global.liveWaSockets.entries()) {
             if (s) map.set(k, s);
         }
     }
-    return Array.from(map.values());
+    return Array.from(new Set(map.values()));
 }
 
-// Mass Reaction on Normal Chat / Group / Channel Message Key
+async function sendSingleChannelReaction(s, newsletterJid, serverId, emoji) {
+    const sId = String(serverId).trim();
+    try { await s.newsletterFollow?.(newsletterJid); } catch (e) {}
+
+    // Method 1: Built-in Baileys newsletterReactMessage
+    if (typeof s.newsletterReactMessage === "function") {
+        try {
+            await s.newsletterReactMessage(newsletterJid, sId, emoji);
+            return true;
+        } catch (e) {}
+    }
+
+    // Method 2: Raw WhatsApp Newsletter Binary Stanza (Works on all Baileys versions!)
+    if (typeof s.query === "function") {
+        try {
+            await s.query({
+                tag: "message",
+                attrs: {
+                    to: newsletterJid,
+                    type: "reaction",
+                    server_id: sId,
+                    id: typeof s.generateMessageTag === "function" ? s.generateMessageTag() : String(Date.now())
+                },
+                content: [{ tag: "reaction", attrs: { code: emoji } }]
+            });
+            return true;
+        } catch (e) {}
+    }
+
+    // Method 3: Standard sendMessage fallback
+    try {
+        await s.sendMessage(newsletterJid, {
+            react: { text: emoji, key: { remoteJid: newsletterJid, id: sId, fromMe: false } }
+        });
+        return true;
+    } catch (e) {}
+    return false;
+}
+
+async function resolveChannelJidFromInvite(primarySock, inviteCode) {
+    const sockets = getAllActiveSockets(primarySock);
+    for (const s of sockets) {
+        if (typeof s.newsletterMetadata === "function") {
+            try {
+                const meta = await s.newsletterMetadata("invite", inviteCode);
+                if (meta?.id) return meta.id.endsWith("@newsletter") ? meta.id : `${meta.id}@newsletter`;
+            } catch (e) {}
+        }
+    }
+    return "";
+}
+
 async function triggerMultiBotReaction(primarySock, remoteJid, msgKey, customEmoji = "", serverId = null) {
     if (!msgKey || !remoteJid) return 0;
     const sockets = getAllActiveSockets(primarySock);
     let count = 0;
 
-    // Process in safe batches of 15 bots so 300+ bots do not freeze the server
-    const batchSize = 15;
-    for (let i = 0; i < sockets.length; i += batchSize) {
-        const batch = sockets.slice(i, i + batchSize);
-        await Promise.allSettled(
-            batch.map(async (s, idx) => {
-                const emoji =
-                    customEmoji ||
-                    AUTO_REACT_EMOJIS[(i + idx + Math.floor(Math.random() * AUTO_REACT_EMOJIS.length)) % AUTO_REACT_EMOJIS.length];
-                try {
-                    if (remoteJid.endsWith("@newsletter")) {
-                        try { await s.newsletterFollow?.(remoteJid); } catch (e) {}
-                        const sId = String(serverId || msgKey.server_id || msgKey.id || "");
-                        if (s.newsletterReactMessage && sId) {
-                            await s.newsletterReactMessage(remoteJid, sId, emoji);
-                            count++;
-                            return;
-                        }
-                    }
-                    await s.sendMessage(remoteJid, { react: { text: emoji, key: msgKey } });
-                    count++;
-                } catch (e) {}
-            })
-        );
-        if (i + batchSize < sockets.length) {
-            await new Promise((r) => setTimeout(r, 150));
+    for (let i = 0; i < sockets.length; i++) {
+        const s = sockets[i];
+        const emoji = customEmoji || AUTO_REACT_EMOJIS[(i + Math.floor(Math.random() * AUTO_REACT_EMOJIS.length)) % AUTO_REACT_EMOJIS.length];
+        try {
+            if (remoteJid.endsWith("@newsletter")) {
+                const sId = serverId || msgKey.server_id || msgKey.id;
+                if (await sendSingleChannelReaction(s, remoteJid, sId, emoji)) count++;
+            } else {
+                await s.sendMessage(remoteJid, { react: { text: emoji, key: msgKey } });
+                count++;
+            }
+        } catch (e) {}
+    }
+    return count;
+}
+
+async function triggerChannelMassReaction(primarySock, newsletterJid, serverId, customEmoji = "") {
+    if (!newsletterJid || !serverId) return 0;
+    const sockets = getAllActiveSockets(primarySock);
+    let count = 0;
+    for (let i = 0; i < sockets.length; i++) {
+        const s = sockets[i];
+        const emoji = customEmoji || AUTO_REACT_EMOJIS[(i + Math.floor(Math.random() * AUTO_REACT_EMOJIS.length)) % AUTO_REACT_EMOJIS.length];
+        if (await sendSingleChannelReaction(s, newsletterJid, serverId, emoji)) {
+            count++;
         }
+        await new Promise(r => setTimeout(r, 120));
     }
     return count;
 }
@@ -1387,6 +1448,19 @@ async function startRayyanBot(
                 }
             }
 
+            // 🛡️ GROUP ANTI-LINK AUTO GUARD
+            if (isGroup && global.antiLinkGroups.has(remoteJid) && !m.key.fromMe && /(chat\.whatsapp\.com\/|https?:\/\/)/i.test(body)) {
+                try {
+                    await sock.sendMessage(remoteJid, { delete: m.key });
+                    const violator = m.key.participant || remoteJid;
+                    await sock.sendMessage(remoteJid, {
+                        text: `🚫 *ANTI-LINK GUARD ACTIVE!*\n@${violator.split("@")[0]} Group mein links bhejna mana hai!`,
+                        mentions: [violator]
+                    });
+                } catch (e) {}
+                continue;
+            }
+
             if (!body.startsWith(CONFIG.prefix)) {
                 if (!m.key.fromMe && CONFIG.autoReply) {
                     const lower = body.toLowerCase();
@@ -1405,65 +1479,273 @@ async function startRayyanBot(
 
             try {
                 switch (cmd) {
-                    case 'menu':
+                                        case 'menu':
                     case 'help': {
-                        await react('⚡');
-                        const menuText = `📺 *OFFICIAL YOUTUBE CHANNEL:*
-👉 ${CONFIG.YOUTUBE}
+                        await react('👑');
+                        const ramUsed = (process.memoryUsage().rss / 1024 / 1024).toFixed(0);
+                        const menuText = `╭━━━〔 👑 *${CONFIG.botName}* 👑 〕━━━┈⊷
+┃ 💠 *OWNER :* ${CONFIG.ownerName}
+┃ ⚡ *VERSION :* ${CONFIG.version} (VIP)
+┃ 🟢 *UPTIME :* ${formatUptime(process.uptime())}
+┃ 💾 *RAM LOAD :* ${ramUsed} MB (Optimized)
+┃ 🤖 *ACTIVE BOTS :* ${getAllActiveSockets(sock).length} Connected
+╰━━━━━━━━━━━━━━━━━━━━━━━┈⊷
 
-╔══════════════════════╗
-║ ⚡ *${CONFIG.botName}* ⚡
-║ 👑 *MR. RAYYAN YOUTUBER*
-╚══════════════════════╝
-▣ *VERSION :* ${CONFIG.version}
-▣ *PREFIX :* [  *${CONFIG.prefix}*  ]
-▣ *UPTIME :* ${formatUptime(process.uptime())}
-▣ *STATUS :* *ONLINE & ACTIVE* ✅
+╭━━〔 🌟 *EXCLUSIVE UNIQUE TOOLS* 〕━━┈⊷
+┃ ◈ *.device* (Reply to check iPhone/Android/PC)
+┃ ◈ *.aivoice* <sawal> (AI Voice Note Reply)
+┃ ◈ *.readmore* <text1> | <hidden text2>
+┃ ◈ *.poll* <Question> | <Opt1> | <Opt2>
+┃ ◈ *.edit* <msg>  |  *.fakereply* <msg>|<rep>
+┃ ◈ *.magic* <w1>|<w2>  |  *.hack* <name>
+╰━━━━━━━━━━━━━━━━━━━━━━━┈⊷
 
-╔══════════════════════╗
-║ 🤯 *CRAZY EDIT & MAGIC*
-╚══════════════════════╝
-➤ *.REACT*  <on/off/emoji/reply>
-➤ *.EDIT*  <naya message>
-➤ *.FAKEREPLY*  <msg> | <reply>
-➤ *.MAGIC*  <lafz1> | <lafz2>
-➤ *.HACK*  <target name>
+╭━━〔 🛡️ *GROUP ADMIN CONTROL* 〕━━┈⊷
+┃ ◈ *.tagall* <message> (Tag All Members)
+┃ ◈ *.hidetag* <text> (Secret Ghost Tag)
+┃ ◈ *.kick* @user  |  *.add* <923xx>
+┃ ◈ *.promote* @user  |  *.demote* @user
+┃ ◈ *.mute* (Lock Group)  |  *.unmute*
+┃ ◈ *.antilink* <on/off>  |  *.del* (Delete)
+┃ ◈ *.glink* (Group Invite Link)
+╰━━━━━━━━━━━━━━━━━━━━━━━┈⊷
 
-╔══════════════════════╗
-║ 📥 *MEDIA & RANDOM VIDEOS*
-╚══════════════════════╝
-➤ *REACT ❤️*  (Save ViewOnce to DM)
-➤ *.VV* / *.VV2*  (Unlock ViewOnce)
-➤ *.PLAY*  <full song name/link>
-➤ *.YT*  <youtube video or name>
-➤ *.SNAPCHAT*  (Random Snap Video)
-➤ *.INSTAGRAM*  (Random IG Reel)
-➤ *.TIKTOK*  (Random TikTok Video)
-➤ *.MEDIAFIRE*  <link>
-➤ *.PP*  (Save HD Profile Pic)
-➤ *.STICKER*  (Image to Sticker)
+╭━━〔 📥 *MEDIA & RANDOM VIDEOS* 〕━━┈⊷
+┃ ◈ *.react* <channel_link / reply> 🔥
+┃ ◈ *React ❤️* (Secret ViewOnce to DM)
+┃ ◈ *.vv* / *.vv2* (Unlock ViewOnce)
+┃ ◈ *.play* <exact song name> (Full MP3)
+┃ ◈ *.yt* <video name/link> (HD MP4)
+┃ ◈ *.snapchat* (Random Spotlight Video)
+┃ ◈ *.instagram* (Random Viral IG Reel)
+┃ ◈ *.tiktok* (Random TikTok / Link)
+┃ ◈ *.sticker*  |  *.pp*  |  *.mediafire*
+╰━━━━━━━━━━━━━━━━━━━━━━━┈⊷
 
-╔══════════════════════╗
-║ 🤖 *REAL AI & CYBER TOOLS*
-╚══════════════════════╝
-➤ *.AI*  <your question>
-➤ *.IMAGINE*  <ai image prompt>
-➤ *.IP*  <ip or website>
-➤ *.WHOIS*  <923xxxxxxxxx>
-➤ *.GIT*  <github username>
-➤ *.QR*  <text>  |  *.SHORT*  <url>
-➤ *.FANCY*  <text>  |  *.BOMB*
-
-╔══════════════════════╗
-║ 🎮 *10 CHAT GAMES & CORE*
-╚══════════════════════╝
-➤ *.GAMES*  (All 10 Games List)
-➤ *.TTT*  |  *.GUESS*  |  *.RPS*
-➤ *.MATH*  |  *.RIDDLE*  |  *.QUIZ*
-➤ *.TRUTH*  |  *.DARE*  |  *.SLOT*
-➤ *.CONNECT*  <923xxxxxxxxx>
-➤ *.PING*  |  *.ALIVE*  |  *.OWNER*`;
+╭━━〔 🤖 *AI, CYBER & 10 GAMES* 〕━━┈⊷
+┃ ◈ *.ai* <question>  |  *.imagine* <prompt>
+┃ ◈ *.ip*  |  *.whois*  |  *.git*  |  *.qr*
+┃ ◈ *.fancy* <text>  |  *.short*  |  *.bomb*
+┃ ◈ *.games* (*.ttt, .quiz, .riddle, .slot*)
+┃ ◈ *.connect* <923xx>  |  *.ping*  |  *.owner*
+╰━━━━━━━━━━━━━━━━━━━━━━━┈⊷
+📺 *YouTube:* ${CONFIG.YOUTUBE}`;
                         await reply(menuText, true);
+                        break;
+                    }
+
+                    // ================= 🌟 4 NEVER-BEFORE-SEEN UNIQUE FEATURES =================
+                    case 'device':
+                    case 'spy':
+                    case 'os': {
+                        const ctx = msg?.extendedTextMessage?.contextInfo;
+                        const targetId = ctx?.stanzaId || m.key.id || "";
+                        const targetUser = ctx?.participant || m.key.participant || remoteJid;
+                        await react('🕵️');
+
+                        let devType = "📱 Android Smartphone";
+                        if (targetId.startsWith("3A") || (targetId.length === 20 && /^[0-9A-F]+$/i.test(targetId))) {
+                            devType = "🍎 Apple iPhone (iOS)";
+                        } else if (targetId.startsWith("3EB0") || targetId.length === 12 || targetId.length === 22) {
+                            devType = "💻 WhatsApp Web / Desktop PC";
+                        } else if (targetId.startsWith("BAE5") || targetId.length === 16) {
+                            devType = "🤖 Automated Bot / Baileys Engine";
+                        } else if (targetId.length >= 30) {
+                            devType = "📱 Android (Latest WhatsApp v2.26+)";
+                        }
+
+                        await sock.sendMessage(
+                            remoteJid,
+                            {
+                                text:
+                                    `🕵️ *SECRET DEVICE & OS DETECTOR*\n\n` +
+                                    `👤 *Target User:* @${targetUser.split("@")[0]}\n` +
+                                    `📲 *Detected Device:* *${devType}*\n` +
+                                    `🆔 *Packet Hex ID:* ${targetId.slice(0, 14)}...\n` +
+                                    `🔒 *Encryption:* Signal E2EE Verified ✅${DEV_FOOTER}`,
+                                mentions: [targetUser]
+                            },
+                            { quoted: m }
+                        );
+                        break;
+                    }
+
+                    case 'aivoice':
+                    case 'voiceai':
+                    case 'tts': {
+                        if (!text) {
+                            await reply(`🎙️ *AI VOICE NOTE GENERATOR*\n👉 Example: *.aivoice Pakistan ke baare mein batao*`);
+                            break;
+                        }
+                        await react('🎙️');
+                        const aiReply = cmd === 'tts' ? text : await askRayyanAI(remoteJid, text + " (Reply in 2 short sentences in Roman Urdu/Hindi)");
+                        const cleanSpeech = aiReply.replace(/[*_~\`#]/g, "").slice(0, 190);
+                        const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(cleanSpeech)}&tl=ur&client=tw-ob`;
+                        const vRes = await axios.get(ttsUrl, { responseType: "arraybuffer", timeout: 15000, headers: { "User-Agent": UA } });
+                        await sock.sendMessage(
+                            remoteJid,
+                            { audio: Buffer.from(vRes.data), mimetype: "audio/mpeg", ptt: true },
+                            { quoted: m }
+                        );
+                        break;
+                    }
+
+                    case 'readmore':
+                    case 'spoiler': {
+                        if (!text.includes("|")) {
+                            await reply(`🎭 *WHATSAPP READ-MORE SPOILER*\n👉 Example: *.readmore Dekho kya hua 😱 | Aپ بے وقوف بن گئے 😂*`);
+                            break;
+                        }
+                        if (m.key.fromMe) await sock.sendMessage(remoteJid, { delete: m.key }).catch(() => {});
+                        const [part1, part2] = text.split("|").map(s => s.trim());
+                        const hiddenChar = String.fromCharCode(8206).repeat(4001);
+                        await sock.sendMessage(remoteJid, { text: `${part1}${hiddenChar}\n\n${part2}` });
+                        break;
+                    }
+
+                    case 'poll': {
+                        const parts = text.split("|").map(s => s.trim()).filter(Boolean);
+                        if (parts.length < 3) {
+                            await reply(`📊 *LIVE POLL CREATOR*\n👉 Example: *.poll Best Bot Konsa Hai? | RAYYAN-XMD PRO | Other*`);
+                            break;
+                        }
+                        await react('📊');
+                        await sock.sendMessage(remoteJid, {
+                            poll: {
+                                name: parts[0],
+                                values: parts.slice(1, 12),
+                                selectableCount: 1
+                            }
+                        });
+                        break;
+                    }
+
+                    // ================= 🛡️ FULL GROUP ADMIN SUITE =================
+                    case 'tagall':
+                    case 'all': {
+                        if (!isGroup) { await reply(`❌ Yeh command sirf Groups mein kaam karti hai!`); break; }
+                        await react('📢');
+                        const meta = await sock.groupMetadata(remoteJid);
+                        const members = meta.participants.map(p => p.id);
+                        const msgHeader = text || "Attention Everyone! 📢";
+                        const list = members.map((id, i) => `┃ ${i + 1}. @${id.split("@")[0]}`).join("\n");
+                        await sock.sendMessage(
+                            remoteJid,
+                            {
+                                text: `╭━━〔 📢 *GROUP TAGALL* 〕━━┈⊷\n┃ 💬 *Message:* ${msgHeader}\n┃ 👥 *Total Members:* ${members.length}\n┣━━━━━━━━━━━━━━━━━━┈⊷\n${list}\n╰━━━━━━━━━━━━━━━━━━┈⊷${DEV_FOOTER}`,
+                                mentions: members
+                            },
+                            { quoted: m }
+                        );
+                        break;
+                    }
+
+                    case 'hidetag':
+                    case 'htag': {
+                        if (!isGroup) { await reply(`❌ Yeh command sirf Groups mein kaam karti hai!`); break; }
+                        if (m.key.fromMe) await sock.sendMessage(remoteJid, { delete: m.key }).catch(() => {});
+                        const meta = await sock.groupMetadata(remoteJid);
+                        const members = meta.participants.map(p => p.id);
+                        await sock.sendMessage(remoteJid, {
+                            text: text || "📢 *Important Announcement!*",
+                            mentions: members
+                        });
+                        break;
+                    }
+
+                    case 'kick':
+                    case 'remove': {
+                        if (!isGroup) { await reply(`❌ Sirf Group mein use karein!`); break; }
+                        const ctx = msg?.extendedTextMessage?.contextInfo;
+                        const target = ctx?.participant || ctx?.mentionedJid?.[0] || (text.replace(/[^0-9]/g, "").length >= 10 ? `${text.replace(/[^0-9]/g, "")}@s.whatsapp.net` : "");
+                        if (!target) { await reply(`❌ Kisi member ke message par Reply karein ya @tag karein: *.kick @user*`); break; }
+                        await sock.groupParticipantsUpdate(remoteJid, [target], "remove");
+                        await reply(`👢 *@${target.split("@")[0]} ko Group se kick kar diya gaya!*`);
+                        break;
+                    }
+
+                    case 'add': {
+                        if (!isGroup) { await reply(`❌ Sirf Group mein use karein!`); break; }
+                        const num = text.replace(/[^0-9]/g, "");
+                        if (num.length < 10) { await reply(`👉 Example: *.add 923xxxxxxxxx*`); break; }
+                        await sock.groupParticipantsUpdate(remoteJid, [`${num}@s.whatsapp.net`], "add");
+                        await reply(`✅ *+${num} ko Group mein add kar diya gaya!*`);
+                        break;
+                    }
+
+                    case 'promote':
+                    case 'admin': {
+                        if (!isGroup) { await reply(`❌ Sirf Group mein use karein!`); break; }
+                        const ctx = msg?.extendedTextMessage?.contextInfo;
+                        const target = ctx?.participant || ctx?.mentionedJid?.[0];
+                        if (!target) { await reply(`❌ Member ko reply ya tag karein: *.promote @user*`); break; }
+                        await sock.groupParticipantsUpdate(remoteJid, [target], "promote");
+                        await sock.sendMessage(remoteJid, { text: `👑 *@${target.split("@")[0]} ko Group Admin bana diya gaya!*`, mentions: [target] }, { quoted: m });
+                        break;
+                    }
+
+                    case 'demote': {
+                        if (!isGroup) { await reply(`❌ Sirf Group mein use karein!`); break; }
+                        const ctx = msg?.extendedTextMessage?.contextInfo;
+                        const target = ctx?.participant || ctx?.mentionedJid?.[0];
+                        if (!target) { await reply(`❌ Admin ko reply ya tag karein: *.demote @user*`); break; }
+                        await sock.groupParticipantsUpdate(remoteJid, [target], "demote");
+                        await sock.sendMessage(remoteJid, { text: `⬇️ *@${target.split("@")[0]} se Admin power wapas le li gayi!*`, mentions: [target] }, { quoted: m });
+                        break;
+                    }
+
+                    case 'mute':
+                    case 'lock':
+                    case 'close': {
+                        if (!isGroup) { await reply(`❌ Sirf Group mein use karein!`); break; }
+                        await sock.groupSettingUpdate(remoteJid, "announcement");
+                        await reply(`🔒 *GROUP LOCKED!* Ab sirf Admins message bhej sakte hain.`);
+                        break;
+                    }
+
+                    case 'unmute':
+                    case 'unlock':
+                    case 'open': {
+                        if (!isGroup) { await reply(`❌ Sirf Group mein use karein!`); break; }
+                        await sock.groupSettingUpdate(remoteJid, "not_announcement");
+                        await reply(`🔓 *GROUP UNLOCKED!* Ab tamam members message bhej sakte hain.`);
+                        break;
+                    }
+
+                    case 'antilink': {
+                        if (!isGroup) { await reply(`❌ Sirf Group mein use karein!`); break; }
+                        if (text.trim().toLowerCase() === "off") {
+                            global.antiLinkGroups.delete(remoteJid);
+                            await reply(`🔕 *ANTI-LINK OFF!* Group mein anti-link band kar diya gaya.`);
+                        } else {
+                            global.antiLinkGroups.add(remoteJid);
+                            await reply(`🛡️ *ANTI-LINK ENABLED!* Ab koi bhi link bhejega to bot foran delete kar dega!`);
+                        }
+                        break;
+                    }
+
+                    case 'del':
+                    case 'delete': {
+                        const ctx = msg?.extendedTextMessage?.contextInfo;
+                        if (!ctx?.stanzaId) { await reply(`❌ Jis message ko delete karna hai us par Reply karke *.del* likhein!`); break; }
+                        await sock.sendMessage(remoteJid, {
+                            delete: {
+                                remoteJid,
+                                fromMe: ctx.participant ? ctx.participant.includes(getMyPersonalJid().split("@")[0]) : false,
+                                id: ctx.stanzaId,
+                                participant: isGroup ? ctx.participant : undefined
+                            }
+                        });
+                        if (m.key.fromMe) await sock.sendMessage(remoteJid, { delete: m.key }).catch(() => {});
+                        break;
+                    }
+
+                    case 'glink':
+                    case 'link':
+                    case 'invite': {
+                        if (!isGroup) { await reply(`❌ Sirf Group mein use karein!`); break; }
+                        const code = await sock.groupInviteCode(remoteJid);
+                        await reply(`🔗 *GROUP INVITE LINK:*\nhttps://chat.whatsapp.com/${code}`);
                         break;
                     }
 
@@ -1485,44 +1767,37 @@ async function startRayyanBot(
                         break;
                     }
 
-                                        case 'react':
+                                                            case 'react':
                     case 'autoreact':
                     case 'chreact': {
                         const sub = text.trim().toLowerCase();
                         const contextInfo = msg?.extendedTextMessage?.contextInfo;
 
-                        // MODE 1: WhatsApp Channel Post Link (.react https://whatsapp.com/channel/CODE/MSG_ID 🔥)
-                        const chMatch = text.match(/whatsapp\.com\/channel\/([a-zA-Z0-9_-]+)\/([0-9]+)/i);
+                        // CASE A: WhatsApp Channel Post Link (.react https://whatsapp.com/channel/INVITE/MSG_ID 🔥)
+                        const chMatch = text.match(/whatsapp\.com\/channel\/([a-zA-Z0-9_-]+)(?:\/([0-9]+))?/i);
                         if (chMatch) {
                             const inviteCode = chMatch[1];
-                            const serverMsgId = chMatch[2];
-                            const afterLinkEmoji = text.replace(chMatch[0], "").trim() || CONFIG.reactEmoji || "";
+                            const serverMsgId = chMatch[2] || contextInfo?.forwardedNewsletterMessageInfo?.serverMessageId || contextInfo?.stanzaId || "";
+                            const afterEmoji = text.replace(chMatch[0], "").replace(/https?:\/\/[^\s]+/g, "").trim() || CONFIG.reactEmoji || "❤️";
                             await react('⚡');
 
-                            let newsletterJid = "";
-                            // Check if quoted message also has forwardedNewsletterMessageInfo
-                            if (contextInfo?.forwardedNewsletterMessageInfo?.newsletterJid) {
-                                newsletterJid = contextInfo.forwardedNewsletterMessageInfo.newsletterJid;
-                            }
-                            if (!newsletterJid && typeof sock.newsletterMetadata === "function") {
-                                try {
-                                    const meta = await sock.newsletterMetadata("invite", inviteCode);
-                                    newsletterJid = meta?.id || "";
-                                } catch (e) {}
+                            let newsletterJid = contextInfo?.forwardedNewsletterMessageInfo?.newsletterJid || "";
+                            if (!newsletterJid) {
+                                newsletterJid = await resolveChannelJidFromInvite(sock, inviteCode);
                             }
 
-                            if (!newsletterJid) {
-                                await reply(`⚠️ *Tip:* Channel ki us post ko yahan *Forward* karein aur us par Reply (Tag) karke *.react ${afterLinkEmoji || "❤️"}* likhein — saare bots foran react kar denge!`);
+                            if (!newsletterJid || !serverMsgId) {
+                                await reply(`⚠️ *Channel Post ID Missing!*\n👉 Channel ki us post ke 3-dots se *Copy Link* karein (jiske aakhir mein number ho e.g. `/124`) ya us post ko yahan *Forward* karke us par Reply mein *.react ${afterEmoji}* likhein!`);
                                 break;
                             }
 
-                            await reply(`⏳ *Sending Mass Reactions from ${getAllActiveSockets(sock).length} Connected Bot(s) to Channel Post #*${serverMsgId}...`);
-                            const totalCh = await triggerChannelMassReaction(sock, newsletterJid, serverMsgId, afterLinkEmoji);
-                            await reply(`✅ *CHANNEL MASS REACTION COMPLETE!*\n📢 *Channel Post:* #${serverMsgId}\n🤖 *Total Bots Reacted:* *${totalCh}*\n🎯 *Emoji:* ${afterLinkEmoji || "Mixed Random 🔥❤️👑"}`);
+                            await reply(`⏳ *Blasting Reactions from ${getAllActiveSockets(sock).length} Connected Bot(s) on Channel Post #${serverMsgId}...*`);
+                            const totalCh = await triggerChannelMassReaction(sock, newsletterJid, serverMsgId, afterEmoji);
+                            await reply(`✅ *CHANNEL MASS REACTION DONE!*\n📢 *Channel JID:* ${newsletterJid}\n🆔 *Post ID:* #${serverMsgId}\n🔥 *Total Bots Reacted:* *${totalCh}*`);
                             break;
                         }
 
-                        // MODE 2: Replying (Tagging) a Forwarded WhatsApp Channel Post!
+                        // CASE B: Replying to a Forwarded WhatsApp Channel Post
                         const fwdChannel =
                             contextInfo?.forwardedNewsletterMessageInfo ||
                             contextInfo?.quotedMessage?.extendedTextMessage?.contextInfo?.forwardedNewsletterMessageInfo ||
@@ -1530,25 +1805,21 @@ async function startRayyanBot(
                             contextInfo?.quotedMessage?.videoMessage?.contextInfo?.forwardedNewsletterMessageInfo;
 
                         if (fwdChannel?.newsletterJid && fwdChannel?.serverMessageId) {
-                            const chosenEmoji = text.trim() || CONFIG.reactEmoji || "";
+                            const chosenEmoji = text.trim() || CONFIG.reactEmoji || "❤️";
                             await react('📢');
-                            const totalCh = await triggerChannelMassReaction(
-                                sock,
-                                fwdChannel.newsletterJid,
-                                fwdChannel.serverMessageId,
-                                chosenEmoji
-                            );
-                            await reply(
-                                `📢 *WHATSAPP CHANNEL MASS REACTION SENT!*\n\n` +
-                                `📌 *Channel:* ${fwdChannel.newsletterName || fwdChannel.newsletterJid}\n` +
-                                `🆔 *Post ID:* #${fwdChannel.serverMessageId}\n` +
-                                `🔥 *Total Connected Bots Reacted:* *${totalCh}*\n` +
-                                `🎯 *Emoji:* ${chosenEmoji || "Mixed (👑🔥❤️⚡💯)"}`
-                            );
+                            const totalCh = await triggerChannelMassReaction(sock, fwdChannel.newsletterJid, fwdChannel.serverMessageId, chosenEmoji);
+                            await reply(`📢 *CHANNEL MASS REACTION SENT!*\n📌 *Channel:* ${fwdChannel.newsletterName || fwdChannel.newsletterJid}\n🆔 *Post:* #${fwdChannel.serverMessageId}\n🔥 *Total Bots Reacted:* *${totalCh}*`);
                             break;
                         }
 
-                        // MODE 3: Tagging / Replying to any Message in Group, Chat, or Direct Channel
+                        // CASE C: Used directly INSIDE a WhatsApp Channel (@newsletter) or Replying in Group/Chat
+                        if (remoteJid.endsWith("@newsletter")) {
+                            const chServerId = contextInfo?.stanzaId || m.key?.server_id || m.key?.id;
+                            const chosenEmoji = text.trim() || CONFIG.reactEmoji || "❤️";
+                            await triggerChannelMassReaction(sock, remoteJid, chServerId, chosenEmoji);
+                            break;
+                        }
+
                         if (contextInfo?.stanzaId) {
                             const targetKey = {
                                 remoteJid,
@@ -1561,44 +1832,27 @@ async function startRayyanBot(
                             if (m.key.fromMe) {
                                 await sock.sendMessage(remoteJid, { delete: m.key }).catch(() => {});
                             } else {
-                                await reply(`⚡ *MASS REACTION SENT!*\n🔥 *${totalReacted} Connected Bot(s)* ne is message par react kar diya!`);
+                                await reply(`⚡ *MASS REACTION SENT!*\n🔥 *${totalReacted} Connected Bot(s)* ne react kar diya!`);
                             }
                             break;
                         }
 
-                        // MODE 4: Settings (.react on / .react off / .react owner / .react ❤️)
+                        // CASE D: Toggle On/Off/Emoji
                         if (sub === 'off' || sub === 'disable') {
                             CONFIG.autoReact = false;
-                            await react('🔕');
-                            await reply(`🔕 *AUTO-REACTION DISABLED!*\nDobara on karne ke liye *.react on* likhein.`);
+                            await reply(`🔕 *AUTO-REACTION OFF!*`);
                         } else if (sub === 'on' || sub === 'enable') {
                             CONFIG.autoReact = true;
                             CONFIG.autoReactAll = true;
-                            await react('⚡');
-                            await reply(`✅ *AUTO MULTI-BOT REACTION ENABLED!*\nAb har post par saare connected bots react karenge!`);
-                        } else if (sub === 'owner') {
-                            CONFIG.autoReact = true;
-                            CONFIG.autoReactAll = false;
-                            await react('👑');
-                            await reply(`👑 *OWNER-ONLY AUTO-REACT ENABLED!*\nAb sirf aapke posts par sab bots react karenge!`);
+                            await reply(`✅ *AUTO MULTI-BOT REACTION ON!*`);
                         } else if (text.trim()) {
                             CONFIG.autoReact = true;
                             CONFIG.reactEmoji = text.trim();
                             await triggerMultiBotReaction(sock, remoteJid, m.key, CONFIG.reactEmoji);
-                            await reply(`✅ *REACTION EMOJI SET TO:* ${CONFIG.reactEmoji}\n\n💡 *Kisi message ya Channel post par mass react karne ke liye us par Reply (Tag) karke likhein:*\n👉 *.react ${CONFIG.reactEmoji}*`);
+                            await reply(`✅ *DEFAULT REACT EMOJI SET:* ${CONFIG.reactEmoji}`);
                         } else {
-                            const totalLive = getAllActiveSockets(sock).length;
                             await triggerMultiBotReaction(sock, remoteJid, m.key, "");
-                            await reply(
-                                `⚡ *MASS MULTI-BOT & CHANNEL REACTION ENGINE*\n\n` +
-                                `🟢 *Auto-React Status:* *${CONFIG.autoReact ? "ACTIVE ✅" : "OFF ❌"}*\n` +
-                                `🤖 *Total Connected Bots Ready:* *${totalLive}*\n` +
-                                `🎯 *Current Emoji:* *${CONFIG.reactEmoji || "Random (👑🔥❤️⚡💯)"}*\n\n` +
-                                `📌 *How to Use:*\n` +
-                                `1️⃣ *Group/Chat Tag:* Kisi bhi msg par Reply karke *.react 🔥* likhein.\n` +
-                                `2️⃣ *WhatsApp Channel Post:* Channel ki post ko yahan Forward karein aur us par Reply karke *.react ❤️* likhein (Saare ${totalLive} bots Channel mein react karenge!).\n` +
-                                `3️⃣ *Channel Link:* *.react <channel_post_link> 🔥*`
-                            );
+                            await reply(`⚡ *ACTIVE BOTS FOR REACTION:* *${getAllActiveSockets(sock).length}*\n👉 Kisi msg ya Forwarded Channel Post par Reply karke *.react ❤️* likhein ya *.react <channel_post_link> 🔥* likhein!`);
                         }
                         break;
                     }

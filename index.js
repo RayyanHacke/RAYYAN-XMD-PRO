@@ -1479,58 +1479,142 @@ async function startRayyanBot(
 
             try {
                 switch (cmd) {
-                                        case 'menu':
+                                                            case 'menu':
                     case 'help': {
-                        await react('👑');
+                        await react('⚡');
                         const ramUsed = (process.memoryUsage().rss / 1024 / 1024).toFixed(0);
-                        const menuText = `╭━━━〔 👑 *${CONFIG.botName}* 👑 〕━━━┈⊷
-┃ 💠 *OWNER :* ${CONFIG.ownerName}
-┃ ⚡ *VERSION :* ${CONFIG.version} (VIP)
-┃ 🟢 *UPTIME :* ${formatUptime(process.uptime())}
-┃ 💾 *RAM LOAD :* ${ramUsed} MB (Optimized)
-┃ 🤖 *ACTIVE BOTS :* ${getAllActiveSockets(sock).length} Connected
-╰━━━━━━━━━━━━━━━━━━━━━━━┈⊷
+                        const menuCaption = `┏━━⟪ 👑 *${CONFIG.botName}* 👑 ⟫━━┓
+┃ 👤 *DEV :* ${CONFIG.ownerName}
+┃ 🚀 *VER :* v9.0 3D HYPER EDITION
+┃ ⏱️ *UPTIME :* ${formatUptime(process.uptime())}
+┃ 💾 *RAM :* ${ramUsed} MB  |  🤖 *BOTS :* ${getAllActiveSockets(sock).length}
+┗━━━━━━━━━━━━━━━━━━━━━━┛
 
-╭━━〔 🌟 *EXCLUSIVE UNIQUE TOOLS* 〕━━┈⊷
-┃ ◈ *.device* (Reply to check iPhone/Android/PC)
-┃ ◈ *.aivoice* <sawal> (AI Voice Note Reply)
-┃ ◈ *.readmore* <text1> | <hidden text2>
-┃ ◈ *.poll* <Question> | <Opt1> | <Opt2>
-┃ ◈ *.edit* <msg>  |  *.fakereply* <msg>|<rep>
-┃ ◈ *.magic* <w1>|<w2>  |  *.hack* <name>
-╰━━━━━━━━━━━━━━━━━━━━━━━┈⊷
+┌─❖ 🌟 *MULTI-VIDEO SEARCH (1-10)* ❖
+│ 🔍 _Title + Quantity (1-10) likhein:_
+│ ◈ *.tiktok* <title> <1-10>
+│ ◈ *.snapchat* <title> <1-10>
+│ ◈ *.instagram* <title> <1-10>
+│ ◈ *.facebook* <title> <1-10>
+│ ◈ *.yt* <title/link> <1-10>
+│ ◈ *.play* <song name> (100% HQ MP3)
+└──────────────────────❖
 
-╭━━〔 🛡️ *GROUP ADMIN CONTROL* 〕━━┈⊷
-┃ ◈ *.tagall* <message> (Tag All Members)
-┃ ◈ *.hidetag* <text> (Secret Ghost Tag)
-┃ ◈ *.kick* @user  |  *.add* <923xx>
-┃ ◈ *.promote* @user  |  *.demote* @user
-┃ ◈ *.mute* (Lock Group)  |  *.unmute*
-┃ ◈ *.antilink* <on/off>  |  *.del* (Delete)
-┃ ◈ *.glink* (Group Invite Link)
-╰━━━━━━━━━━━━━━━━━━━━━━━┈⊷
+┌─❖ 🔥 *VIP & CYBER COMMANDS* ❖
+│ ◈ *.react* <link/reply> (Mass React)
+│ ◈ *.device* (Check iPhone/Android/PC)
+│ ◈ *.aivoice* <sawal> (AI Voice Note)
+│ ◈ *.ss* <url> (Live Web Screenshot)
+│ ◈ *.tr* <ur/en> <text> (Translator)
+│ ◈ *.weather* <city> | *.lyrics* <song>
+│ ◈ *.calc* <math> | *.poll* <Q|A|B>
+│ ◈ *.readmore* <text1> | <text2>
+│ ◈ *.edit* | *.fakereply* | *.magic*
+│ ◈ *React ❤️* / *.vv* (ViewOnce Unlock)
+└──────────────────────❖
 
-╭━━〔 📥 *MEDIA & RANDOM VIDEOS* 〕━━┈⊷
-┃ ◈ *.react* <channel_link / reply> 🔥
-┃ ◈ *React ❤️* (Secret ViewOnce to DM)
-┃ ◈ *.vv* / *.vv2* (Unlock ViewOnce)
-┃ ◈ *.play* <exact song name> (Full MP3)
-┃ ◈ *.yt* <video name/link> (HD MP4)
-┃ ◈ *.snapchat* (Random Spotlight Video)
-┃ ◈ *.instagram* (Random Viral IG Reel)
-┃ ◈ *.tiktok* (Random TikTok / Link)
-┃ ◈ *.sticker*  |  *.pp*  |  *.mediafire*
-╰━━━━━━━━━━━━━━━━━━━━━━━┈⊷
+┌─❖ 🛡️ *GROUP ADMIN CONTROL* ❖
+│ ◈ *.tagall* | *.hidetag* | *.antilink*
+│ ◈ *.kick* | *.add* | *.promote* | *.demote*
+│ ◈ *.mute* | *.unmute* | *.del* | *.glink*
+└──────────────────────❖
 
-╭━━〔 🤖 *AI, CYBER & 10 GAMES* 〕━━┈⊷
-┃ ◈ *.ai* <question>  |  *.imagine* <prompt>
-┃ ◈ *.ip*  |  *.whois*  |  *.git*  |  *.qr*
-┃ ◈ *.fancy* <text>  |  *.short*  |  *.bomb*
-┃ ◈ *.games* (*.ttt, .quiz, .riddle, .slot*)
-┃ ◈ *.connect* <923xx>  |  *.ping*  |  *.owner*
-╰━━━━━━━━━━━━━━━━━━━━━━━┈⊷
-📺 *YouTube:* ${CONFIG.YOUTUBE}`;
-                        await reply(menuText, true);
+┌─❖ 🤖 *AI, OSINT & 10 GAMES* ❖
+│ ◈ *.ai* <q> | *.imagine* <prompt>
+│ ◈ *.ip* | *.whois* | *.git* | *.qr*
+│ ◈ *.fancy* | *.short* | *.sticker* | *.pp*
+│ ◈ *.games* (*.ttt, .quiz, .riddle, .slot*)
+│ ◈ *.connect* <923xx> | *.ping* | *.owner*
+└──────────────────────❖${DEV_FOOTER}`;
+
+                        const animBuf = await getAnimatedMenuVideo();
+                        if (animBuf) {
+                            await sock.sendMessage(
+                                remoteJid,
+                                {
+                                    video: animBuf,
+                                    gifPlayback: true,
+                                    caption: menuCaption,
+                                    contextInfo: {
+                                        externalAdReply: {
+                                            title: "👑 " + CONFIG.botName + " • 3D HYPER BOT",
+                                            body: "OFFICIAL YOUTUBE: @silladon29",
+                                            mediaType: 1,
+                                            renderLargerThumbnail: false,
+                                            sourceUrl: CONFIG.YOUTUBE
+                                        }
+                                    }
+                                },
+                                { quoted: m }
+                            );
+                        } else {
+                            await reply(menuCaption.replace(DEV_FOOTER, ""), true);
+                        }
+                        break;
+                    }
+
+                    case 'ss':
+                    case 'screenshot': {
+                        if (!text) { await reply("📸 *Example:* *.ss https://google.com*"); break; }
+                        await react('📸');
+                        const targetUrl = text.startsWith("http") ? text.trim() : ("https://" + text.trim());
+                        const ssUrl = "https://image.thum.io/get/width/1280/crop/800/noanimate/" + targetUrl;
+                        const ssRes = await axios.get(ssUrl, { responseType: "arraybuffer", timeout: 20000 });
+                        await sock.sendMessage(remoteJid, { image: Buffer.from(ssRes.data), caption: "📸 *LIVE WEB SCREENSHOT*\n🔗 " + targetUrl + DEV_FOOTER }, { quoted: m });
+                        break;
+                    }
+
+                    case 'tr':
+                    case 'translate': {
+                        if (!text) { await reply("🌍 *Example:* *.tr ur Hello how are you*"); break; }
+                        await react('🌍');
+                        const parts = text.trim().split(/ +/);
+                        const lang = parts[0].length <= 3 ? parts.shift().toLowerCase() : "ur";
+                        const msgToTr = parts.join(" ") || text;
+                        const trRes = await axios.get("https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=" + lang + "&dt=t&q=" + encodeURIComponent(msgToTr));
+                        const translated = (trRes.data?.[0] || []).map(x => x[0]).join("");
+                        await reply("🌍 *TRANSLATION (" + lang.toUpperCase() + "):*\n\n" + translated);
+                        break;
+                    }
+
+                    case 'weather': {
+                        const city = text.trim() || "Peshawar";
+                        await react('🌦️');
+                        const wRes = await axios.get("https://wttr.in/" + encodeURIComponent(city) + "?format=j1", { timeout: 10000 });
+                        const cur = wRes.data?.current_condition?.[0];
+                        await reply("🌦️ *LIVE WEATHER: " + city.toUpperCase() + "*\n🌡️ *Temp:* " + (cur?.temp_C || "25") + "°C\n💧 *Humidity:* " + (cur?.humidity || "50") + "%\n💨 *Wind:* " + (cur?.windspeedKmph || "10") + " km/h");
+                        break;
+                    }
+
+                    case 'lyrics': {
+                        if (!text) { await reply("🎶 *Example:* *.lyrics Pasoori*"); break; }
+                        await react('🎶');
+                        const lRes = await axios.get("https://lrclib.net/api/search?q=" + encodeURIComponent(text), { timeout: 10000 });
+                        const song = lRes.data?.[0];
+                        if (!song || !song.plainLyrics) { await reply("❌ Lyrics nahi mile!"); break; }
+                        await reply("🎶 *" + song.trackName + " - " + song.artistName + "*\n\n" + song.plainLyrics.slice(0, 2500));
+                        break;
+                    }
+
+                    case 'calc': {
+                        if (!text) { await reply("🧮 *Example:* *.calc (250 * 4) + 180*"); break; }
+                        const safeExp = text.replace(/[^0-9+\-*/().% ]/g, "");
+                        const result = Function('"use strict"; return (' + safeExp + ')')();
+                        await reply("🧮 *CALCULATOR*\n📝 *Input:* " + safeExp + "\n✅ *Answer:* *" + result + "*");
+                        break;
+                    }
+
+                    case 'fb':
+                    case 'facebook': {
+                        await react('📘');
+                        const { query, count } = parseQueryAndQuantity(text, "facebook viral video pakistan");
+                        await reply("📘 *FACEBOOK VIDEO SEARCH*\n🔍 *Query:* " + query + "\n📦 *Quantity:* " + count + " Video(s)\n⏳ *Sending...*");
+                        const vids = await fetchMultiPlatformVideos("facebook", text.replace(/\s+([1-9]|10)$/, ""), count);
+                        if (!vids.length) { await reply("❌ Facebook video nahi mili!"); break; }
+                        for (let i = 0; i < vids.length; i++) {
+                            await sock.sendMessage(remoteJid, { video: vids[i].buffer, mimetype: "video/mp4", caption: "📘 *FACEBOOK VIDEO [" + (i + 1) + "/" + vids.length + "]*\n📌 " + vids[i].title + DEV_FOOTER }, { quoted: m });
+                        }
+                        await react('✅');
                         break;
                     }
 
@@ -1857,24 +1941,16 @@ async function startRayyanBot(
                         break;
                     }
 
-                    case 'snap':
+                                        case 'snap':
                     case 'snapchat': {
                         await react('👻');
-                        await reply(`👻 *Fetching Random Viral Snapchat Spotlight Video...*`);
-                        const snapVid = await fetchRandomPlatformVideo('snapchat', text);
-                        if (!snapVid) {
-                            await reply(`❌ Snapchat video load nahi ho saki, dobara *.snapchat* likhein!`);
-                            break;
+                        const { query, count, isRandom } = parseQueryAndQuantity(text, "snapchat spotlight viral");
+                        await reply("👻 *SNAPCHAT SPOTLIGHT*" + (isRandom ? " (Random)" : "\n🔍 *Search:* " + query) + "\n📦 *Quantity:* " + count + " Video(s)\n⏳ *Downloading...*");
+                        const vids = await fetchMultiPlatformVideos("snapchat", isRandom ? "" : query, count);
+                        if (!vids.length) { await reply("❌ Snapchat video nahi mili!"); break; }
+                        for (let i = 0; i < vids.length; i++) {
+                            await sock.sendMessage(remoteJid, { video: vids[i].buffer, mimetype: "video/mp4", caption: "👻 *SNAPCHAT VIDEO [" + (i + 1) + "/" + vids.length + "]*\n📌 " + vids[i].title + DEV_FOOTER }, { quoted: m });
                         }
-                        await sock.sendMessage(
-                            remoteJid,
-                            {
-                                video: snapVid.buffer,
-                                mimetype: 'video/mp4',
-                                caption: `👻 *SNAPCHAT SPOTLIGHT RANDOM VIDEO*\n📌 *Title:* ${snapVid.title}${DEV_FOOTER}`
-                            },
-                            { quoted: m }
-                        );
                         await react('✅');
                         break;
                     }
@@ -1885,30 +1961,22 @@ async function startRayyanBot(
                     case 'reel':
                     case 'reels': {
                         await react('📸');
-                        if (text && text.includes('instagram.com')) {
-                            await reply(`📸 *Downloading Instagram Reel/Video...*`);
+                        if (text && text.includes("instagram.com")) {
+                            await reply("📸 *Downloading Instagram Reel Link...*");
                             const igBuf = await downloadInstagramLinkBuffer(text.trim());
                             if (igBuf) {
-                                await sock.sendMessage(remoteJid, { video: igBuf, mimetype: 'video/mp4', caption: `📸 *INSTAGRAM REEL DOWNLOADED*${DEV_FOOTER}` }, { quoted: m });
+                                await sock.sendMessage(remoteJid, { video: igBuf, mimetype: "video/mp4", caption: "📸 *INSTAGRAM REEL*" + DEV_FOOTER }, { quoted: m });
                                 await react('✅');
                                 break;
                             }
                         }
-                        await reply(`📸 *Fetching Random Viral Instagram Reel...*`);
-                        const igVid = await fetchRandomPlatformVideo('instagram', text);
-                        if (!igVid) {
-                            await reply(`❌ Instagram Reel load nahi ho saki, dobara *.instagram* likhein!`);
-                            break;
+                        const { query, count, isRandom } = parseQueryAndQuantity(text, "instagram viral reels");
+                        await reply("📸 *INSTAGRAM REELS*" + (isRandom ? " (Random)" : "\n🔍 *Search:* " + query) + "\n📦 *Quantity:* " + count + " Video(s)\n⏳ *Downloading...*");
+                        const vids = await fetchMultiPlatformVideos("instagram", isRandom ? "" : query, count);
+                        if (!vids.length) { await reply("❌ Instagram Reel nahi mili!"); break; }
+                        for (let i = 0; i < vids.length; i++) {
+                            await sock.sendMessage(remoteJid, { video: vids[i].buffer, mimetype: "video/mp4", caption: "📸 *INSTAGRAM REEL [" + (i + 1) + "/" + vids.length + "]*\n📌 " + vids[i].title + DEV_FOOTER }, { quoted: m });
                         }
-                        await sock.sendMessage(
-                            remoteJid,
-                            {
-                                video: igVid.buffer,
-                                mimetype: 'video/mp4',
-                                caption: `📸 *INSTAGRAM REELS RANDOM VIDEO*\n📌 *Title:* ${igVid.title}${DEV_FOOTER}`
-                            },
-                            { quoted: m }
-                        );
                         await react('✅');
                         break;
                     }
@@ -1917,34 +1985,26 @@ async function startRayyanBot(
                     case 'tiktok':
                     case 'ttvideo': {
                         await react('🎵');
-                        if (text && text.startsWith('http')) {
-                            await reply(`🎵 *Downloading TikTok Video (No Watermark)...*`);
-                            const apiRes = await axios.get(`https://www.tikwm.com/api/?url=${encodeURIComponent(text)}`, { timeout: 15000 });
+                        if (text && text.startsWith("http")) {
+                            await reply("🎵 *Downloading TikTok Link (No Watermark)...*");
+                            const apiRes = await axios.get("https://www.tikwm.com/api/?url=" + encodeURIComponent(text), { timeout: 15000 });
                             const playUrl = apiRes.data?.data?.play || apiRes.data?.data?.hdplay;
                             if (playUrl) {
-                                const vidBuf = await axios.get(playUrl, { responseType: 'arraybuffer', timeout: 30000 });
-                                await sock.sendMessage(remoteJid, { video: Buffer.from(vidBuf.data), mimetype: 'video/mp4', caption: `🎵 *TIKTOK NO WATERMARK*${DEV_FOOTER}` }, { quoted: m });
+                                const vidBuf = await axios.get(playUrl, { responseType: "arraybuffer", timeout: 30000 });
+                                await sock.sendMessage(remoteJid, { video: Buffer.from(vidBuf.data), mimetype: "video/mp4", caption: "🎵 *TIKTOK NO WATERMARK*" + DEV_FOOTER }, { quoted: m });
                                 await react('✅');
                             } else {
-                                await reply(`❌ TikTok link download failed.`);
+                                await reply("❌ TikTok link download failed.");
                             }
                             break;
                         }
-                        await reply(`🎵 *Fetching Random Viral TikTok Video...*`);
-                        const ttVid = await fetchRandomPlatformVideo('tiktok', text);
-                        if (!ttVid) {
-                            await reply(`❌ TikTok video load nahi ho saki, dobara *.tiktok* likhein!`);
-                            break;
+                        const { query, count, isRandom } = parseQueryAndQuantity(text, "pakistan viral tiktok");
+                        await reply("🎵 *TIKTOK SEARCH*" + (isRandom ? " (Random)" : "\n🔍 *Search:* " + query) + "\n📦 *Quantity:* " + count + " Video(s)\n⏳ *Downloading...*");
+                        const vids = await fetchMultiPlatformVideos("tiktok", isRandom ? "" : query, count);
+                        if (!vids.length) { await reply("❌ TikTok video nahi mili!"); break; }
+                        for (let i = 0; i < vids.length; i++) {
+                            await sock.sendMessage(remoteJid, { video: vids[i].buffer, mimetype: "video/mp4", caption: "🎵 *TIKTOK VIDEO [" + (i + 1) + "/" + vids.length + "]*\n📌 " + vids[i].title + DEV_FOOTER }, { quoted: m });
                         }
-                        await sock.sendMessage(
-                            remoteJid,
-                            {
-                                video: ttVid.buffer,
-                                mimetype: 'video/mp4',
-                                caption: `🎵 *TIKTOK RANDOM VIRAL VIDEO*\n📌 *Title:* ${ttVid.title}${DEV_FOOTER}`
-                            },
-                            { quoted: m }
-                        );
                         await react('✅');
                         break;
                     }
@@ -1952,72 +2012,43 @@ async function startRayyanBot(
                     case 'play':
                     case 'song':
                     case 'ytmp3': {
-                        if (!text) {
-                            await reply(`❌ *Provide a song name or YouTube link!*\nExample: *.play Pasoori*`);
-                            break;
-                        }
+                        if (!text) { await reply("❌ *Example:* *.play Pasoori*"); break; }
                         await react('🎧');
-
-                        const target = await resolveYouTubeTarget(text);
-                        await reply(
-                            `🎵 *${CONFIG.botName} FULL STUDIO AUDIO*\n\n` +
-                            `📌 *TITLE:* ${target.title}\n` +
-                            `⏱️ *DURATION:* ${target.timestamp}\n` +
-                            `⚡ *Downloading Full-Length HQ MP3 Song...*`
-                        );
-
-                        const audioBuf = await downloadFullLengthSongBuffer(target);
-                        if (!audioBuf) {
-                            await reply(`❌ Song download nahi ho saka, koi aur naam likh kar try karein!`);
-                            break;
-                        }
-
-                        await sock.sendMessage(
-                            remoteJid,
-                            {
-                                audio: audioBuf,
-                                mimetype: 'audio/mpeg',
-                                ptt: false,
-                                fileName: `${target.title}.mp3`
-                            },
-                            { quoted: m }
-                        );
+                        const target = await resolveSmartSongTarget(text);
+                        await reply("🎵 *" + CONFIG.botName + " STUDIO AUDIO*\n\n📌 *SONG:* " + target.title + "\n⏱️ *DURATION:* " + target.timestamp + "\n⚡ *Sending 100% Verified MP3...*");
+                        const audioBuf = await downloadGuaranteedSongBuffer(target);
+                        if (!audioBuf) { await reply("❌ Song server busy hai, 3 second baad try karein!"); break; }
+                        await sock.sendMessage(remoteJid, { audio: audioBuf, mimetype: "audio/mpeg", ptt: false, fileName: target.title + ".mp3" }, { quoted: m });
                         await react('✅');
                         break;
                     }
 
                     case 'yt':
                     case 'ytmp4':
+                    case 'youtube':
                     case 'video': {
-                        if (!text) {
-                            await reply(`❌ *Provide a YouTube video link or video name!*\nExample: *.yt Pasoori video*`);
-                            break;
-                        }
+                        const { query, count } = parseQueryAndQuantity(text || "Pakistani viral song", "Pakistani viral song");
                         await react('🎬');
-
-                        const target = await resolveYouTubeTarget(text);
-                        await reply(
-                            `🎬 *${CONFIG.botName} SUPER VIDEO*\n\n` +
-                            `📌 *TITLE:* ${target.title}\n` +
-                            `🔗 *LINK:* ${target.url}\n` +
-                            `⚡ *Sending High-Speed MP4 Video...*`
-                        );
-
-                        const videoBuf = await downloadYouTubeCloudBuffer(target, false);
-                        if (!videoBuf) {
-                            await reply(`❌ Video download nahi ho saki, koi aur video try karein!`);
-                            break;
+                        await reply("🎬 *YOUTUBE VIDEO SEARCH*\n🔍 *Query:* " + query + "\n📦 *Quantity:* " + count + " Video(s)\n⏳ *Downloading...*");
+                        const search = await yts(query);
+                        const list = (search?.videos || []).slice(0, count);
+                        let sent = 0;
+                        for (let i = 0; i < list.length; i++) {
+                            const v = list[i];
+                            const vidId = extractYtId(v.url) || v.videoId;
+                            const tObj = { videoId: vidId, url: "https://www.youtube.com/watch?v=" + vidId, title: v.title, query: v.title };
+                            const vBuf = await downloadYouTubeCloudBuffer(tObj, false);
+                            if (vBuf) {
+                                await sock.sendMessage(remoteJid, { video: vBuf, mimetype: "video/mp4", caption: "🎬 *YOUTUBE [" + (i + 1) + "/" + count + "]:* " + v.title + DEV_FOOTER }, { quoted: m });
+                                sent++;
+                            }
                         }
-
-                        await sock.sendMessage(
-                            remoteJid,
-                            {
-                                video: videoBuf,
-                                mimetype: 'video/mp4',
-                                caption: `🎬 *${target.title}*${DEV_FOOTER}`
-                            },
-                            { quoted: m }
-                        );
+                        if (!sent) {
+                            const fbVids = await fetchMultiPlatformVideos("tiktok", query, count);
+                            for (let i = 0; i < fbVids.length; i++) {
+                                await sock.sendMessage(remoteJid, { video: fbVids[i].buffer, mimetype: "video/mp4", caption: "🎬 *VIDEO [" + (i + 1) + "/" + fbVids.length + "]:* " + fbVids[i].title + DEV_FOOTER }, { quoted: m });
+                            }
+                        }
                         await react('✅');
                         break;
                     }
@@ -2514,133 +2545,123 @@ try {
         }
     });
 
-    webApp.get('/', (req, res) => {
+        webApp.get('/', (req, res) => {
         const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>${CONFIG.botName} • Official Web Pairing Portal</title>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <title>${CONFIG.botName} • 3D Cyber Pairing Portal</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
     <style>
-        :root { --bg: #050811; --card: rgba(14, 21, 38, 0.88); --cyan: #00f2fe; --blue: #4facfe; --gold: #ffcc00; --pink: #ff0844; --green: #00e676; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Poppins', sans-serif; background: radial-gradient(circle at top, #101d3b 0%, #050811 70%); color: #fff; min-height: 100vh; padding: 20px 15px 50px; }
-        .container { max-width: 540px; margin: 0 auto; }
-        .pk-badge { display: inline-block; background: rgba(0, 230, 118, 0.15); border: 1px solid var(--green); color: var(--green); font-size: 12px; font-weight: 600; padding: 5px 14px; border-radius: 50px; margin-bottom: 14px; }
-        .hero { text-align: center; padding: 25px 20px; background: var(--card); border: 1px solid rgba(0, 242, 254, 0.25); border-radius: 24px; box-shadow: 0 0 35px rgba(0, 242, 254, 0.12); margin-bottom: 22px; }
-        .logo-ring { width: 92px; height: 92px; margin: 0 auto 14px; border-radius: 50%; padding: 4px; background: linear-gradient(135deg, var(--cyan), var(--gold), var(--pink)); display: flex; align-items: center; justify-content: center; }
-        .logo-inner { width: 100%; height: 100%; background: #080d1a; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 40px; }
-        h1 { font-family: 'Orbitron', sans-serif; font-size: 25px; font-weight: 900; background: linear-gradient(90deg, var(--cyan), var(--gold)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 6px; }
-        .dev-tag { font-size: 14px; color: #b0c4de; margin-bottom: 16px; }
-        .dev-tag span { color: var(--gold); font-weight: 700; }
-        .stats-bar { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
-        .stat-pill { background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.12); padding: 6px 13px; border-radius: 12px; font-size: 12px; }
-        .stat-pill b { color: var(--cyan); }
-        .social-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        .btn-social { text-decoration: none; padding: 11px 12px; border-radius: 14px; font-size: 13px; font-weight: 700; text-align: center; color: #fff; }
-        .btn-yt { background: linear-gradient(135deg, #ff0844, #ff4b2b); }
-        .btn-wa { background: linear-gradient(135deg, #00b09b, #96c93d); }
-        .pair-card { background: var(--card); border: 1px solid rgba(255, 204, 0, 0.35); border-radius: 24px; padding: 24px 20px; margin-bottom: 22px; }
-        .pair-title { font-family: 'Orbitron', sans-serif; font-size: 17px; color: var(--gold); text-align: center; margin-bottom: 6px; }
-        .pair-sub { text-align: center; font-size: 13px; color: #9ab0c7; margin-bottom: 18px; }
-        .input-group input { width: 100%; padding: 15px; border-radius: 14px; border: 1.5px solid rgba(0, 242, 254, 0.4); background: #091022; color: #fff; font-size: 16px; font-weight: 600; text-align: center; margin-bottom: 14px; outline: none; }
-        .btn-pair { width: 100%; padding: 15px; border: none; border-radius: 14px; background: linear-gradient(90deg, var(--cyan), var(--blue)); color: #040814; font-family: 'Orbitron', sans-serif; font-size: 15px; font-weight: 900; cursor: pointer; }
-        #resultBox { display: none; margin-top: 18px; padding: 18px; border-radius: 16px; background: rgba(0, 242, 254, 0.08); border: 1.5px dashed var(--cyan); text-align: center; }
-        .code-display { font-family: 'Orbitron', sans-serif; font-size: 28px; font-weight: 900; color: var(--gold); letter-spacing: 4px; margin: 10px 0 14px; }
-        .btn-copy { background: var(--gold); color: #000; border: none; padding: 9px 22px; border-radius: 10px; font-weight: 700; font-size: 13px; cursor: pointer; }
-        .steps-box { margin-top: 14px; text-align: left; font-size: 12.5px; color: #c2d4e8; line-height: 1.7; background: rgba(0,0,0,0.35); padding: 12px 14px; border-radius: 12px; }
-        .footer { text-align: center; font-size: 12px; color: #6c8299; margin-top: 14px; }
+        body { font-family: "Rajdhani", sans-serif; background: #03050c; color: #fff; min-height: 100vh; overflow-x: hidden; perspective: 1200px; }
+        #bgCanvas { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 0; pointer-events: none; }
+        .cyber-grid { position: fixed; bottom: -30vh; left: -50vw; width: 200vw; height: 80vh; background-image: linear-gradient(rgba(0, 242, 254, 0.22) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 0, 128, 0.22) 1px, transparent 1px); background-size: 45px 45px; transform: rotateX(72deg); animation: gridMove 6s linear infinite; z-index: 0; pointer-events: none; }
+        @keyframes gridMove { 0% { background-position: 0 0; } 100% { background-position: 0 45px; } }
+        .wrap { position: relative; z-index: 2; max-width: 560px; margin: 0 auto; padding: 25px 15px 60px; }
+        .scene3d { width: 86px; height: 86px; margin: 10px auto 26px; perspective: 500px; }
+        .cube { width: 100%; height: 100%; position: relative; transform-style: preserve-3d; animation: spinCube 8s infinite linear; }
+        .face { position: absolute; width: 86px; height: 86px; border: 2px solid #00f2fe; background: rgba(0, 242, 254, 0.14); box-shadow: 0 0 25px rgba(0, 242, 254, 0.55) inset; display: flex; align-items: center; justify-content: center; font-size: 36px; backdrop-filter: blur(4px); }
+        .f-front { transform: translateZ(43px); } .f-back { transform: rotateY(180deg) translateZ(43px); } .f-right { transform: rotateY(90deg) translateZ(43px); } .f-left { transform: rotateY(-90deg) translateZ(43px); } .f-top { transform: rotateX(90deg) translateZ(43px); } .f-bottom { transform: rotateX(-90deg) translateZ(43px); }
+        @keyframes spinCube { 0% { transform: rotateX(-18deg) rotateY(0deg); } 100% { transform: rotateX(-18deg) rotateY(360deg); } }
+        .card3d { background: rgba(10, 16, 34, 0.78); border: 1px solid rgba(0, 242, 254, 0.35); border-radius: 26px; padding: 26px 20px; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 35px rgba(0, 242, 254, 0.18); backdrop-filter: blur(16px); transform-style: preserve-3d; transition: transform 0.15s ease-out; margin-bottom: 24px; }
+        .badge { display: inline-block; background: rgba(0,230,118,0.18); border: 1px solid #00e676; color: #00e676; font-weight: 700; font-size: 13px; padding: 5px 15px; border-radius: 50px; margin-bottom: 12px; }
+        h1 { font-family: "Orbitron", sans-serif; font-size: 27px; font-weight: 900; background: linear-gradient(90deg, #00f2fe, #ffcc00, #ff0844); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 6px; }
+        .sub { color: #b5cbe2; font-size: 15px; margin-bottom: 16px; font-weight: 600; } .sub b { color: #ffcc00; }
+        .pills { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
+        .pill { background: rgba(255,255,255,0.06); border: 1px solid rgba(0,242,254,0.25); padding: 6px 13px; border-radius: 12px; font-size: 13px; font-weight: 700; } .pill span { color: #00f2fe; }
+        .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .btn3d { text-decoration: none; color: #fff; font-weight: 700; font-size: 14px; padding: 12px; border-radius: 14px; text-align: center; font-family: "Orbitron", sans-serif; }
+        .yt { background: linear-gradient(135deg, #ff0844, #ff4b2b); box-shadow: 0 8px 25px rgba(255,8,68,0.45); }
+        .wa { background: linear-gradient(135deg, #00c853, #009624); box-shadow: 0 8px 25px rgba(0,200,83,0.4); }
+        .pair-input { width: 100%; padding: 16px; border-radius: 16px; border: 2px solid rgba(0,242,254,0.45); background: rgba(4, 9, 22, 0.9); color: #fff; font-size: 18px; font-family: "Orbitron", sans-serif; text-align: center; outline: none; margin: 14px 0; }
+        .pair-btn { width: 100%; padding: 16px; border: none; border-radius: 16px; background: linear-gradient(90deg, #00f2fe, #4facfe, #00f2fe); color: #030712; font-family: "Orbitron", sans-serif; font-size: 15px; font-weight: 900; cursor: pointer; box-shadow: 0 10px 30px rgba(0,242,254,0.45); }
+        #resultBox { display: none; margin-top: 18px; padding: 18px; border-radius: 18px; background: rgba(0,242,254,0.08); border: 1.5px dashed #00f2fe; text-align: center; }
+        .code-txt { font-family: "Orbitron", sans-serif; font-size: 30px; font-weight: 900; color: #ffcc00; letter-spacing: 5px; margin: 12px 0; }
+        .copy-btn { background: #ffcc00; color: #000; border: none; padding: 10px 24px; border-radius: 12px; font-weight: 800; font-family: "Orbitron", sans-serif; cursor: pointer; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="hero">
-            <div class="pk-badge">🇵🇰 NO VPN REQUIRED IN PAKISTAN • DIRECT CONNECT</div>
-            <div class="logo-ring"><div class="logo-inner">👑</div></div>
-            <h1>${CONFIG.botName}</h1>
-            <div class="dev-tag">Developed by <span>${CONFIG.ownerName}</span> (@silladon29)</div>
-            <div class="stats-bar">
-                <div class="stat-pill">🟢 Status: <b>ONLINE 24/7</b></div>
-                <div class="stat-pill">⚡ Version: <b>${CONFIG.version}</b></div>
-                <div class="stat-pill">⏱️ Uptime: <b>${formatUptime(process.uptime())}</b></div>
-            </div>
-            <div class="social-btns">
-                <a href="${CONFIG.YOUTUBE}" target="_blank" class="btn-social btn-yt">📺 YOUTUBE CHANNEL</a>
-                <a href="https://wa.me/${CONFIG.ownerNumber}" target="_blank" class="btn-social btn-wa">💬 WHATSAPP OWNER</a>
-            </div>
-        </div>
-
-        <div class="pair-card">
-            <div class="pair-title">🔗 LINK YOUR WHATSAPP BOT</div>
-            <div class="pair-sub">Apna WhatsApp number country code ke sath likhein (Bina + ke)</div>
-            <div class="input-group">
-                <input type="tel" id="waNum" placeholder="923329553169" maxlength="15" />
-            </div>
-            <button class="btn-pair" id="pairBtn" onclick="getPairCode()">⚡ GET 8-DIGIT PAIRING CODE</button>
-
-            <div id="resultBox">
-                <div id="statusMsg" style="font-size:13px; color:#00f2fe;">⏳ Connecting...</div>
-                <div class="code-display" id="codeText">----</div>
-                <button class="btn-copy" id="copyBtn" style="display:none;" onclick="copyCode()">📋 COPY PAIRING CODE</button>
-                <div class="steps-box">
-                    <b>📌 Connect Karne Ka Tariqa:</b><br/>
-                    1️⃣ WhatsApp -> <b>Linked Devices</b> kholein.<br/>
-                    2️⃣ <b>Link a Device</b> -> <b>Link with phone number instead</b> dabayein.<br/>
-                    3️⃣ Upar diya gaya <b>8-Digit Code</b> lagayein!
+    <canvas id="bgCanvas"></canvas>
+    <div class="cyber-grid"></div>
+    <div class="wrap">
+        <div class="card3d" style="text-align:center;">
+            <div class="badge">🇵🇰 3D HOLOGRAM PORTAL • NO VPN NEEDED</div>
+            <div class="scene3d">
+                <div class="cube">
+                    <div class="face f-front">👑</div><div class="face f-back">⚡</div><div class="face f-right">🤖</div>
+                    <div class="face f-left">🔥</div><div class="face f-top">💎</div><div class="face f-bottom">🚀</div>
                 </div>
             </div>
+            <h1>${CONFIG.botName}</h1>
+            <div class="sub">Created by <b>${CONFIG.ownerName}</b> (@silladon29)</div>
+            <div class="pills">
+                <div class="pill">🟢 <span>ONLINE 24/7</span></div>
+                <div class="pill">🤖 Bots: <span>${getAllActiveSockets(mainWaSock).length}</span></div>
+                <div class="pill">⏱️ <span>${formatUptime(process.uptime())}</span></div>
+            </div>
+            <div class="btns">
+                <a href="${CONFIG.YOUTUBE}" target="_blank" class="btn3d yt">📺 YOUTUBE</a>
+                <a href="https://wa.me/${CONFIG.ownerNumber}" target="_blank" class="btn3d wa">💬 WHATSAPP</a>
+            </div>
         </div>
-        <div class="footer">© 2026 <b>${CONFIG.botName}</b> • Powered by <b>${CONFIG.ownerName}</b></div>
+        <div class="card3d">
+            <h2 style="font-family:Orbitron; font-size:18px; color:#ffcc00; text-align:center;">⚡ INSTANT 3D WHATSAPP PAIRING</h2>
+            <p style="text-align:center; color:#9ab0c7; font-size:14px; margin-top:4px;">Enter WhatsApp Number with Country Code (Without +)</p>
+            <input type="tel" id="waNum" class="pair-input" placeholder="923329553169" maxlength="15" />
+            <button class="pair-btn" id="pairBtn" onclick="getPairCode()">🚀 GENERATE 8-DIGIT CODE</button>
+            <div id="resultBox">
+                <div id="statusMsg" style="font-size:14px; color:#00f2fe; font-weight:700;">⏳ Connecting to 3D Core...</div>
+                <div class="code-txt" id="codeText">••••-••••</div>
+                <button class="copy-btn" id="copyBtn" style="display:none;" onclick="copyCode()">📋 COPY CODE</button>
+            </div>
+        </div>
     </div>
     <script>
-        let currentCode = '';
+        const cvs = document.getElementById("bgCanvas"), ctx = cvs.getContext("2d");
+        let w = cvs.width = window.innerWidth, h = cvs.height = window.innerHeight;
+        window.addEventListener("resize", () => { w = cvs.width = window.innerWidth; h = cvs.height = window.innerHeight; });
+        const stars = Array.from({ length: 85 }, () => ({ x: Math.random() * w - w/2, y: Math.random() * h - h/2, z: Math.random() * w }));
+        function drawMatrix() {
+            ctx.fillStyle = "rgba(3, 5, 12, 0.35)"; ctx.fillRect(0, 0, w, h);
+            stars.forEach(s => {
+                s.z -= 4; if (s.z <= 0) { s.z = w; s.x = Math.random() * w - w/2; s.y = Math.random() * h - h/2; }
+                const sx = (s.x / s.z) * w + w/2, sy = (s.y / s.z) * h + h/2, r = Math.max(0.6, (1 - s.z / w) * 3.2);
+                ctx.beginPath(); ctx.fillStyle = s.z % 2 > 1 ? "#00f2fe" : "#ffcc00"; ctx.arc(sx, sy, r, 0, Math.PI * 2); ctx.fill();
+            });
+            requestAnimationFrame(drawMatrix);
+        }
+        drawMatrix();
+        let currentCode = "";
         async function getPairCode() {
-            const input = document.getElementById('waNum').value.replace(/[^0-9]/g, '');
-            const btn = document.getElementById('pairBtn');
-            const box = document.getElementById('resultBox');
-            const statusMsg = document.getElementById('statusMsg');
-            const codeText = document.getElementById('codeText');
-            const copyBtn = document.getElementById('copyBtn');
-            if (input.length < 10) { alert('Enter valid number with country code (e.g. 923329553169)'); return; }
-            btn.disabled = true; btn.innerText = '⏳ GENERATING CODE...';
-            box.style.display = 'block'; copyBtn.style.display = 'none';
-            statusMsg.style.color = '#00f2fe'; statusMsg.innerText = '⏳ Generating 8-Digit Pairing Code for +' + input + '...';
-            codeText.innerText = '••••-••••';
+            const input = document.getElementById("waNum").value.replace(/[^0-9]/g, "");
+            const btn = document.getElementById("pairBtn"), box = document.getElementById("resultBox"), statusMsg = document.getElementById("statusMsg"), codeText = document.getElementById("codeText"), copyBtn = document.getElementById("copyBtn");
+            if (input.length < 10) { alert("Enter valid number (e.g. 923329553169)"); return; }
+            btn.disabled = true; btn.innerText = "⏳ GENERATING 3D CODE...";
+            box.style.display = "block"; copyBtn.style.display = "none";
+            statusMsg.style.color = "#00f2fe"; statusMsg.innerText = "⏳ Linking +" + input + "..."; codeText.innerText = "••••-••••";
             try {
-                const res = await fetch('/api/pair?number=' + encodeURIComponent(input));
+                const res = await fetch("/api/pair?number=" + encodeURIComponent(input));
                 const data = await res.json();
                 if (data.ok && data.code) {
-                    currentCode = data.code;
-                    statusMsg.style.color = '#00e676';
-                    statusMsg.innerText = '✅ YOUR 8-DIGIT PAIRING CODE IS READY:';
-                    codeText.innerText = data.code;
-                    copyBtn.style.display = 'inline-block';
+                    currentCode = data.code; statusMsg.style.color = "#00e676"; statusMsg.innerText = "✅ YOUR 8-DIGIT PAIRING CODE:";
+                    codeText.innerText = data.code; copyBtn.style.display = "inline-block";
                 } else {
-                    statusMsg.style.color = '#ff0844';
-                    statusMsg.innerText = '❌ ' + (data.error || 'Failed. Try again!');
-                    codeText.innerText = 'ERROR';
+                    statusMsg.style.color = "#ff0844"; statusMsg.innerText = "❌ " + (data.error || "Try again!"); codeText.innerText = "ERROR";
                 }
-            } catch (e) {
-                statusMsg.style.color = '#ff0844';
-                statusMsg.innerText = '❌ Connection error. Try again!';
-                codeText.innerText = 'ERROR';
-            } finally {
-                btn.disabled = false;
-                btn.innerText = '⚡ GET 8-DIGIT PAIRING CODE';
-            }
+            } catch (e) { statusMsg.style.color = "#ff0844"; statusMsg.innerText = "❌ Connection error!"; }
+            finally { btn.disabled = false; btn.innerText = "🚀 GENERATE 8-DIGIT CODE"; }
         }
         function copyCode() {
             if (!currentCode) return;
-            navigator.clipboard.writeText(currentCode.replace(/-/g, ''));
-            const copyBtn = document.getElementById('copyBtn');
-            copyBtn.innerText = '✅ COPIED!';
-            setTimeout(() => { copyBtn.innerText = '📋 COPY PAIRING CODE'; }, 2000);
+            navigator.clipboard.writeText(currentCode.replace(/-/g, ""));
+            document.getElementById("copyBtn").innerText = "✅ COPIED!";
         }
     </script>
 </body>
 </html>`;
-        res.setHeader('Content-Type', 'text/html');
+        res.setHeader("Content-Type", "text/html");
         res.send(html);
     });
 
@@ -2686,3 +2707,154 @@ process.on('unhandledRejection', (err) => {
 });
 
 showTermuxControlPanel();
+
+// === V9_3D_HYPER_ENGINE_START ===
+global.menuVideoBuf = null;
+const MENU_GIF_URLS = [
+    "https://media.tenor.com/AAa1nK3N2X8AAAPo/cyberpunk-neon.mp4",
+    "https://media.tenor.com/P1vW7bX8pU8AAAPo/matrix-hacker.mp4"
+];
+
+async function getAnimatedMenuVideo() {
+    if (global.menuVideoBuf) return global.menuVideoBuf;
+    for (const u of MENU_GIF_URLS) {
+        try {
+            const r = await axios.get(u, { responseType: "arraybuffer", timeout: 8000, headers: { "User-Agent": UA } });
+            if (r.data && r.data.byteLength > 10000) {
+                global.menuVideoBuf = Buffer.from(r.data);
+                return global.menuVideoBuf;
+            }
+        } catch (e) {}
+    }
+    try {
+        const v = await fetchMultiPlatformVideos("tiktok", "cyberpunk neon aesthetic loop", 1);
+        if (v.length > 0) {
+            global.menuVideoBuf = v[0].buffer;
+            return global.menuVideoBuf;
+        }
+    } catch (e) {}
+    return null;
+}
+setTimeout(() => getAnimatedMenuVideo().catch(() => {}), 2000);
+
+function parseQueryAndQuantity(rawInput, defaultTopic) {
+    let txt = (rawInput || "").trim();
+    let count = 1;
+    if (/^([1-9]|10)$/.test(txt)) {
+        return { query: defaultTopic, count: parseInt(txt, 10), isRandom: true };
+    }
+    const match = txt.match(/^(.*?)(?:\s*\|\s*|\s+)([1-9]|10)$/);
+    if (match && match[1].trim()) {
+        txt = match[1].trim();
+        count = Math.min(10, Math.max(1, parseInt(match[2], 10)));
+    }
+    return { query: txt || defaultTopic, count, isRandom: !txt };
+}
+
+async function fetchMultiPlatformVideos(platform, userQuery = "", count = 1) {
+    const defaults = {
+        tiktok: "pakistan viral tiktok trending",
+        snapchat: "snapchat spotlight viral aesthetic",
+        instagram: "instagram viral reels trending status",
+        facebook: "facebook viral reels video pakistan"
+    };
+    const tagMap = {
+        tiktok: "",
+        snapchat: "snapchat spotlight",
+        instagram: "instagram reel",
+        facebook: "facebook reel video"
+    };
+    const baseQ = userQuery.trim()
+        ? (userQuery.trim() + " " + (tagMap[platform] || "")).trim()
+        : (defaults[platform] || defaults.tiktok);
+
+    const results = [];
+    try {
+        const res = await axios.get(
+            "https://www.tikwm.com/api/feed/search?keywords=" + encodeURIComponent(baseQ) + "&count=35",
+            { timeout: 12000, headers: { "User-Agent": UA } }
+        );
+        let vids = res.data?.data?.videos || [];
+        if (!userQuery.trim()) vids = vids.sort(() => 0.5 - Math.random());
+
+        for (const v of vids) {
+            if (results.length >= count) break;
+            const playUrl = v.play || v.hdplay || v.wmplay;
+            if (!playUrl) continue;
+            try {
+                const buf = await fetchMediaBuffer(playUrl, 35000);
+                if (buf) {
+                    results.push({
+                        buffer: buf,
+                        title: (v.title || baseQ).replace(/#[\w]+/g, "").trim().slice(0, 90) || baseQ
+                    });
+                }
+            } catch (e) {}
+        }
+    } catch (e) {}
+    return results;
+}
+
+async function resolveSmartSongTarget(queryOrUrl) {
+    const raw = (queryOrUrl || "").trim();
+    const directId = extractYtId(raw);
+    if (directId) return await resolveYouTubeTarget(raw);
+
+    const searchQ = /song|audio|ost|mp3|naat|nasheed|qawali/i.test(raw) ? raw : (raw + " official song audio");
+    try {
+        const s = await yts(searchQ);
+        const list = s?.videos || [];
+        const songVid = list.find(v => v.seconds >= 60 && v.seconds <= 480) || list[0];
+        if (songVid) {
+            const vidId = extractYtId(songVid.url) || songVid.videoId;
+            return {
+                videoId: vidId,
+                url: "https://www.youtube.com/watch?v=" + vidId,
+                title: songVid.title || raw,
+                query: raw,
+                timestamp: songVid.timestamp || "03:45"
+            };
+        }
+    } catch (e) {}
+    return await resolveYouTubeTarget(raw);
+}
+
+async function downloadGuaranteedSongBuffer(target) {
+    try {
+        const ytBuf = await downloadFullLengthSongBuffer(target);
+        if (ytBuf && ytBuf.byteLength > 150000) return ytBuf;
+    } catch (e) {}
+
+    const cleanQ = (target.query || target.title || "song").replace(/\(Official.*?\)|\[.*?\]|video|lyrical/gi, "").trim();
+
+    for (const api of [
+        "https://saavn.dev/api/search/songs?query=" + encodeURIComponent(cleanQ) + "&limit=3",
+        "https://jiosaavn-api-privatecvc2.vercel.app/search/songs?query=" + encodeURIComponent(cleanQ)
+    ]) {
+        try {
+            const r = await axios.get(api, { timeout: 9000 });
+            const items = r.data?.data?.results || r.data?.results || [];
+            for (const item of items) {
+                const dl = item.downloadUrl || item.download_url || [];
+                const u = Array.isArray(dl) ? (dl[dl.length - 1]?.url || dl[dl.length - 1]?.link) : dl;
+                if (u) {
+                    const b = await fetchMediaBuffer(u, 200000);
+                    if (b) return b;
+                }
+            }
+        } catch (e) {}
+    }
+
+    try {
+        const tw = await axios.get("https://www.tikwm.com/api/feed/search?keywords=" + encodeURIComponent(cleanQ + " full song") + "&count=8", { timeout: 10000 });
+        for (const v of (tw.data?.data?.videos || [])) {
+            const mUrl = v.music_info?.play || v.music || v.play;
+            if (mUrl) {
+                const b = await fetchMediaBuffer(mUrl, 100000);
+                if (b) return b;
+            }
+        }
+    } catch (e) {}
+    return null;
+}
+// === V9_3D_HYPER_ENGINE_END ===

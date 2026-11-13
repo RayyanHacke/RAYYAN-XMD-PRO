@@ -2114,27 +2114,27 @@ async function startRayyanBot(
                         break;
                     }
 
-                    case 'tt':
+                                        case 'tt':
                     case 'tiktok':
                     case 'ttvideo': {
                         await react('🎵');
-                        if (text && text.startsWith("http")) {
-                            await reply("🎵 *Downloading TikTok Link (No Watermark)...*");
-                            const apiRes = await axios.get("https://www.tikwm.com/api/?url=" + encodeURIComponent(text), { timeout: 15000 });
-                            const playUrl = apiRes.data?.data?.play || apiRes.data?.data?.hdplay;
-                            if (playUrl) {
-                                const vidBuf = await axios.get(playUrl, { responseType: "arraybuffer", timeout: 30000 });
-                                await sock.sendMessage(remoteJid, { video: Buffer.from(vidBuf.data), mimetype: "video/mp4", caption: "🎵 *TIKTOK NO WATERMARK*" + DEV_FOOTER }, { quoted: m });
+                        if (text && /https?:\/\//i.test(text)) {
+                            const linkMatch = text.match(/https?:\/\/[^\s]+/i);
+                            const cleanLink = linkMatch ? linkMatch[0] : text.trim();
+                            await reply("🎵 *Downloading TikTok Video (No Watermark)...*");
+                            const vidBuf = await downloadTikTokLinkAnti403(cleanLink);
+                            if (vidBuf) {
+                                await sock.sendMessage(remoteJid, { video: vidBuf, mimetype: "video/mp4", caption: "🎵 *TIKTOK HD (NO WATERMARK)*" + DEV_FOOTER }, { quoted: m });
                                 await react('✅');
                             } else {
-                                await reply("❌ TikTok link download failed.");
+                                await reply("❌ Yeh TikTok link private ya invalid hai, koi aur link try karein!");
                             }
                             break;
                         }
                         const { query, count, isRandom } = parseQueryAndQuantity(text, "pakistan viral tiktok");
-                        await reply("🎵 *TIKTOK SEARCH*" + (isRandom ? " (Random)" : "\n🔍 *Search:* " + query) + "\n📦 *Quantity:* " + count + " Video(s)\n⏳ *Downloading...*");
+                        await reply("🎵 *TIKTOK VIDEOS*" + (isRandom ? " (Random Viral)" : "\n🔍 *Search:* " + query) + "\n📦 *Quantity:* " + count + " Video(s)\n⏳ *Downloading...*");
                         const vids = await fetchMultiPlatformVideos("tiktok", isRandom ? "" : query, count);
-                        if (!vids.length) { await reply("❌ TikTok video nahi mili!"); break; }
+                        if (!vids.length) { await reply("❌ Video server busy hai, 3 second baad dobara try karein!"); break; }
                         for (let i = 0; i < vids.length; i++) {
                             await sock.sendMessage(remoteJid, { video: vids[i].buffer, mimetype: "video/mp4", caption: "🎵 *TIKTOK VIDEO [" + (i + 1) + "/" + vids.length + "]*\n📌 " + vids[i].title + DEV_FOOTER }, { quoted: m });
                         }
@@ -3100,27 +3100,23 @@ async function executeMassChannelReport(primarySock, newsletterJid, inviteCode =
 }
 // === MASS REPORT ENGINE END ===
 
-// === V9_ULTIMATE_FIX_START ===
+// === V10_MASTER_ENGINE_START ===
 function extractValidEmojis(str) {
     if (!str) return [];
     try {
         if (typeof Intl !== "undefined" && Intl.Segmenter) {
             const seg = new Intl.Segmenter("en", { granularity: "grapheme" });
-            const list = Array.from(seg.segment(str.trim()))
-                .map(x => x.segment.trim())
-                .filter(Boolean);
+            const list = Array.from(seg.segment(str.trim())).map(x => x.segment.trim()).filter(Boolean);
             if (list.length > 0) return list;
         }
     } catch (e) {}
     return Array.from(str.trim()).filter(ch => ch.trim());
 }
 
-const _origTriggerMultiBotReaction = typeof triggerMultiBotReaction === "function" ? triggerMultiBotReaction : null;
-triggerMultiBotReaction = async function(primarySock, remoteJid, msgKey, customEmoji = "", serverId = null) {
+async function triggerMultiBotReaction(primarySock, remoteJid, msgKey, customEmoji = "", serverId = null) {
     const parsedList = extractValidEmojis(customEmoji || CONFIG.reactEmoji || "");
     const sockets = typeof getAllActiveSockets === "function" ? getAllActiveSockets(primarySock) : [primarySock];
     let count = 0;
-
     for (let i = 0; i < sockets.length; i++) {
         const s = sockets[i];
         if (!s) continue;
@@ -3138,32 +3134,26 @@ triggerMultiBotReaction = async function(primarySock, remoteJid, msgKey, customE
         } catch (e) {}
     }
     return count;
-};
+}
 
-// Fix parseQueryAndQuantity to handle "-10", "10", "rendom", "random", dots & symbols
-parseQueryAndQuantity = function(rawInput, defaultTopic) {
-    let txt = String(rawInput || "")
-        .replace(/^[.|\-]+/, "")
-        .trim();
+function parseQueryAndQuantity(rawInput, defaultTopic) {
+    let txt = String(rawInput || "").replace(/^[.|\-]+/, "").trim();
     let count = 1;
 
-    // If user only typed a number like "10" or "-10"
     const onlyNum = txt.match(/^-?([1-9]|10)$/);
     if (onlyNum) {
         return { query: defaultTopic, count: parseInt(onlyNum[1], 10), isRandom: true };
     }
 
-    // Match trailing quantity like "viral video -10", "viral 5", "status | 4"
     const match = txt.match(/^(.*?)(?:\s*\|\s*|\s+-?|\s*x)([1-9]|10)$/i);
     if (match && match[1].trim()) {
         txt = match[1].trim();
         count = Math.min(10, Math.max(1, parseInt(match[2], 10)));
     }
 
-    // Clean words like "rendom", "random", "viral vide"
     const cleaned = txt
-        .replace(/\b(rendom|random|rand|plz|please)\b/gi, "")
-        .replace(/\bvide\b/gi, "video")
+        .replace(/\b(rendom|random|rand|video|videos|vid|vids|reel|reels|spotlight|short|shorts|status|viral|tiktok|snapchat|snap|instagram|insta|facebook|fb)\b/gi, "")
+        .replace(/[^a-zA-Z0-9\u0600-\u06FF\u0900-\u097F\s]/g, " ")
         .replace(/\s+/g, " ")
         .trim();
 
@@ -3171,337 +3161,361 @@ parseQueryAndQuantity = function(rawInput, defaultTopic) {
         return { query: defaultTopic, count, isRandom: true };
     }
     return { query: cleaned, count, isRandom: false };
-};
+}
 
-// Fix fetchMultiPlatformVideos with POST Form-Data, Rate-Limit Retry & 4 Backup Video APIs
-fetchMultiPlatformVideos = async function(platform, userQuery = "", count = 1) {
-    const defaults = {
-        tiktok: "pakistan viral status video",
-        snapchat: "snapchat spotlight aesthetic status",
-        instagram: "instagram viral reels status",
-        facebook: "facebook viral video status"
-    };
-    const tagMap = {
-        tiktok: "",
-        snapchat: "spotlight",
-        instagram: "reels",
-        facebook: "viral"
-    };
+async function downloadVideoBufferSafe(rawUrl, minBytes = 15000) {
+    if (!rawUrl || typeof rawUrl !== "string") return null;
+    const fullUrl = rawUrl.startsWith("http") ? rawUrl : ("https://www.tikwm.com" + rawUrl);
 
-    const cleanUserQ = String(userQuery || "")
-        .replace(/\b(rendom|random|rand)\b/gi, "")
-        .replace(/-[0-9]+/g, "")
-        .trim();
+    const attempts = [
+        fullUrl,
+        "https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(fullUrl)
+    ];
 
-    const baseQ = cleanUserQ
-        ? (cleanUserQ + " " + (tagMap[platform] || "")).trim()
-        : (defaults[platform] || defaults.tiktok);
-
-    const results = [];
-    const seenUrls = new Set();
-
-    const downloadClip = async (rawUrl, titleText) => {
-        if (!rawUrl || typeof rawUrl !== "string") return false;
-        const fullUrl = rawUrl.startsWith("http") ? rawUrl : ("https://www.tikwm.com" + rawUrl);
-        if (seenUrls.has(fullUrl)) return false;
-        seenUrls.add(fullUrl);
+    for (const u of attempts) {
         try {
-            const res = await axios.get(fullUrl, {
+            const res = await axios.get(u, {
                 responseType: "arraybuffer",
                 timeout: 25000,
                 maxRedirects: 5,
-                headers: {
-                    "User-Agent": UA,
-                    "Referer": "https://www.tikwm.com/"
-                }
+                headers: { "User-Agent": UA, "Accept": "*/*" }
             });
-            if (res.data && res.data.byteLength > 12000) {
-                results.push({
-                    buffer: Buffer.from(res.data),
-                    title: String(titleText || baseQ).replace(/#[\w]+/g, "").trim().slice(0, 85) || baseQ
-                });
-                return true;
+            const cType = String(res.headers?.["content-type"] || "").toLowerCase();
+            if (cType.includes("text/html") || cType.includes("application/json")) continue;
+            if (res.data && res.data.byteLength >= minBytes) {
+                return Buffer.from(res.data);
             }
         } catch (e) {}
-        return false;
-    };
+    }
+    return null;
+}
 
-    // ENGINE 1: TikWM POST Search (With automatic 1.2s retry if rate-limited)
-    for (let attempt = 0; attempt < 2 && results.length < count; attempt++) {
+async function downloadTikTokLinkAnti403(ttUrl) {
+    const q = encodeURIComponent(ttUrl);
+
+    try {
+        const r = await axios.get("https://api.tiklydown.eu.org/api/download?url=" + q, { timeout: 12000, headers: { "User-Agent": UA } });
+        const link = r.data?.video?.noWatermark || r.data?.video?.watermark;
+        const buf = await downloadVideoBufferSafe(link);
+        if (buf) return buf;
+    } catch (e) {}
+
+    try {
+        const form = new URLSearchParams();
+        form.append("query", ttUrl);
+        const r = await axios.post("https://lovetik.com/api/ajax/search", form.toString(), {
+            timeout: 12000,
+            headers: { "User-Agent": UA, "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8", "Origin": "https://lovetik.com" }
+        });
+        const links = (r.data?.links || []).map(x => x.a).filter(Boolean);
+        for (const l of links) {
+            const buf = await downloadVideoBufferSafe(l);
+            if (buf) return buf;
+        }
+    } catch (e) {}
+
+    const apis = [
+        "https://delirius-apiofc.vercel.app/download/tiktok?url=" + q,
+        "https://api.siputzx.my.id/api/d/tiktok?url=" + q,
+        "https://api.vreden.my.id/api/tiktok?url=" + q,
+        "https://api.ryzendesu.vip/api/downloader/ttdl?url=" + q,
+        "https://api.agatz.xyz/api/tiktok?url=" + q,
+        "https://bk9.fun/download/tiktok?url=" + q
+    ];
+    for (const api of apis) {
         try {
-            if (attempt > 0) await new Promise(r => setTimeout(r, 1300));
-            const form = new URLSearchParams();
-            form.append("keywords", baseQ);
-            form.append("count", "35");
-            form.append("cursor", "0");
-
-            const res = await axios.post("https://www.tikwm.com/api/feed/search", form.toString(), {
-                timeout: 12000,
-                headers: {
-                    "User-Agent": UA,
-                    "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-                    "Origin": "https://www.tikwm.com",
-                    "Referer": "https://www.tikwm.com/"
-                }
-            });
-            let vids = res.data?.data?.videos || [];
-            if (!cleanUserQ) vids = vids.sort(() => 0.5 - Math.random());
-
-            for (const v of vids) {
-                if (results.length >= count) break;
-                const playUrl = v.play || v.wmplay || v.hdplay;
-                await downloadClip(playUrl, v.title);
+            const r = await axios.get(api, { timeout: 12000, headers: { "User-Agent": UA } });
+            const d = r.data;
+            const candidates = [
+                d?.data?.meta?.media?.[0]?.org,
+                d?.data?.meta?.media?.[0]?.hd,
+                d?.data?.urls?.[0],
+                d?.data?.play,
+                d?.result?.data?.[0]?.url,
+                d?.result?.play,
+                d?.result?.video,
+                d?.result?.url,
+                d?.BK9?.video,
+                d?.url
+            ].filter(Boolean);
+            for (const cLink of candidates) {
+                const buf = await downloadVideoBufferSafe(cLink);
+                if (buf) return buf;
             }
         } catch (e) {}
     }
 
-    // ENGINE 2: Multi-Server Search APIs (Siputzx / Agatz / Keith / Diioffc)
+    const tikwmTarget = "https://www.tikwm.com/api/?url=" + q;
+    const proxyUrls = [
+        "https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(tikwmTarget),
+        "https://api.allorigins.win/raw?url=" + encodeURIComponent(tikwmTarget),
+        tikwmTarget
+    ];
+    for (const pUrl of proxyUrls) {
+        try {
+            const r = await axios.get(pUrl, { timeout: 12000, headers: { "User-Agent": UA } });
+            const d = typeof r.data === "string" ? JSON.parse(r.data) : r.data;
+            const playUrl = d?.data?.play || d?.data?.wmplay || d?.data?.hdplay;
+            const buf = await downloadVideoBufferSafe(playUrl);
+            if (buf) return buf;
+        } catch (e) {}
+    }
+
+    return null;
+}
+
+const RANDOM_TOPICS_POOL = {
+    tiktok: ["pakistan viral status", "attitude status edit", "pakistani funny viral", "urdu poetry status", "cricket viral edit"],
+    snapchat: ["night car drive status", "aesthetic snapchat streak", "luxury lifestyle status", "rain night drive aesthetic", "travel aesthetic status"],
+    instagram: ["pakistani drama ost status", "aesthetic lyrics reel", "bollywood aesthetic edit", "attitude viral reel", "trending song status"],
+    facebook: ["pakistani funny clip", "viral cricket moment", "desi comedy video", "amazing nature clip", "viral short video"]
+};
+
+async function fetchMultiPlatformVideos(platform, userQuery = "", count = 1) {
+    const pool = RANDOM_TOPICS_POOL[platform] || RANDOM_TOPICS_POOL.tiktok;
+    const randomPick = pool[Math.floor(Math.random() * pool.length)];
+    const baseQ = userQuery && userQuery.trim().length >= 2 ? userQuery.trim() : randomPick;
+
+    const results = [];
+    const seen = new Set();
+
+    const tryAddClip = async (url, title) => {
+        if (!url || typeof url !== "string" || results.length >= count) return;
+        if (seen.has(url)) return;
+        seen.add(url);
+        const buf = await downloadVideoBufferSafe(url, 15000);
+        if (buf) {
+            results.push({
+                buffer: buf,
+                title: String(title || baseQ).replace(/#[\w]+/g, "").trim().slice(0, 80) || baseQ
+            });
+        }
+    };
+
+    const rawTikwmSearch = "https://www.tikwm.com/api/feed/search?keywords=" + encodeURIComponent(baseQ) + "&count=30";
+    const searchGateways = [
+        "https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(rawTikwmSearch),
+        "https://api.allorigins.win/raw?url=" + encodeURIComponent(rawTikwmSearch),
+        rawTikwmSearch
+    ];
+
+    for (const gw of searchGateways) {
+        if (results.length >= count) break;
+        try {
+            const r = await axios.get(gw, { timeout: 12000, headers: { "User-Agent": UA } });
+            const d = typeof r.data === "string" ? JSON.parse(r.data) : r.data;
+            let vids = d?.data?.videos || [];
+            if (!userQuery) vids = vids.sort(() => 0.5 - Math.random());
+            for (const v of vids) {
+                if (results.length >= count) break;
+                await tryAddClip(v.play || v.wmplay || v.hdplay, v.title);
+            }
+        } catch (e) {}
+    }
+
     if (results.length < count) {
-        const searchApis = [
+        const cloudSearchApis = [
+            "https://delirius-apiofc.vercel.app/search/tiktoksearch?query=" + encodeURIComponent(baseQ),
             "https://api.siputzx.my.id/api/s/tiktok?query=" + encodeURIComponent(baseQ),
+            "https://api.vreden.my.id/api/tiktoksearch?query=" + encodeURIComponent(baseQ),
             "https://api.agatz.xyz/api/tiktoksearch?message=" + encodeURIComponent(baseQ),
             "https://apis-keith.vercel.app/search/tiktoksearch?q=" + encodeURIComponent(baseQ)
         ];
-        for (const api of searchApis) {
+        for (const api of cloudSearchApis) {
             if (results.length >= count) break;
             try {
                 const r = await axios.get(api, { timeout: 12000, headers: { "User-Agent": UA } });
-                const list = r.data?.data || r.data?.result || [];
+                const d = r.data;
+                let list = d?.meta || d?.data?.videos || d?.data || d?.result?.data || d?.result || [];
                 if (Array.isArray(list)) {
+                    if (!userQuery) list = list.sort(() => 0.5 - Math.random());
                     for (const item of list) {
                         if (results.length >= count) break;
-                        const u = item.play || item.no_watermark || item.video || item.url;
-                        await downloadClip(u, item.title);
+                        const clipUrl = item.hd || item.play || item.no_watermark || item.nowm || item.video || item.url || item.wmplay;
+                        await tryAddClip(clipUrl, item.title);
                     }
                 }
             } catch (e) {}
         }
     }
 
-    // ENGINE 3: TikWM Regional Trending Feed (PK / IN / US)
     if (results.length < count) {
         try {
-            await new Promise(r => setTimeout(r, 1100));
-            const form = new URLSearchParams();
-            form.append("region", "PK");
-            form.append("count", "25");
-            const feedRes = await axios.post("https://www.tikwm.com/api/feed/list", form.toString(), {
-                timeout: 12000,
-                headers: {
-                    "User-Agent": UA,
-                    "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"
-                }
-            });
-            let list = feedRes.data?.data || [];
-            if (Array.isArray(list)) {
-                list = list.sort(() => 0.5 - Math.random());
-                for (const v of list) {
-                    if (results.length >= count) break;
-                    await downloadClip(v.play || v.wmplay, v.title);
+            const ytRes = await yts(baseQ + " #shorts");
+            const shorts = (ytRes?.videos || []).filter(v => v.seconds <= 90).slice(0, count * 2);
+            for (const s of shorts) {
+                if (results.length >= count) break;
+                const vidId = extractYtId(s.url) || s.videoId;
+                const tObj = { videoId: vidId, url: "https://www.youtube.com/watch?v=" + vidId, title: s.title, query: s.title };
+                const vBuf = await downloadYouTubeCloudBuffer(tObj, false);
+                if (vBuf) {
+                    results.push({ buffer: vBuf, title: (s.title || baseQ).slice(0, 80) });
                 }
             }
         } catch (e) {}
     }
 
     return results;
-};
+}
 
-// Fix Smart Song Resolver so pasted YouTube Titles (with |, -, (), emojis) work 100%
-function cleanPastedSongTitle(rawText) {
+function cleanSongQuery(rawText) {
     let s = String(rawText || "")
         .replace(/https?:\/\/[^\s]+/g, "")
-        .replace(/\b(lyrical|official|full\s*video|video\s*song|audio\s*song|hd|4k|ost|mv)\b/gi, "")
+        .replace(/\b(lyrical|official|full\s*video|video\s*song|audio\s*song|hd|4k|mv)\b/gi, "")
         .replace(/\([^)]*\)|\[[^\]]*\]/g, "")
         .replace(/[:"]/g, " ")
         .trim();
-
-    // If user pasted a long YouTube title separated by | or -
     const parts = s.split(/\s*[|–—]\s*/).map(p => p.trim()).filter(p => p.length > 2);
-    const coreTitle = parts[0] || s;
-    const secondPart = parts[1] || "";
-    const shortSearch = (coreTitle + " " + secondPart).replace(/\s+/g, " ").trim().slice(0, 65);
+    const core = parts[0] || s;
+    const second = parts[1] || "";
     return {
-        coreTitle: coreTitle.slice(0, 50),
-        shortSearch: shortSearch || s.slice(0, 60) || "Pakistani Song"
+        coreTitle: core.slice(0, 50) || "Pasoori",
+        fullSearch: ((core + " " + second).replace(/\s+/g, " ").trim() || s).slice(0, 65)
     };
 }
 
-resolveSmartSongTarget = async function(queryOrUrl) {
-    const raw = String(queryOrUrl || "").trim();
-    const directId = extractYtId(raw);
-    if (directId) {
-        return {
-            videoId: directId,
-            url: "https://www.youtube.com/watch?v=" + directId,
-            title: "YouTube Audio Track",
-            query: raw,
-            timestamp: "03:45"
-        };
-    }
+async function fetchOfficialJioSaavnFullSong(query) {
+    const MIN_FULL_BYTES = 900000;
 
-    const { coreTitle, shortSearch } = cleanPastedSongTitle(raw);
-
-    // 1. Try local yt-search first
     try {
-        const s = await yts(shortSearch);
-        const list = s?.videos || [];
-        const v = list.find(x => x.seconds >= 45 && x.seconds <= 600) || list[0];
-        if (v) {
-            const vidId = extractYtId(v.url) || v.videoId;
-            return {
-                videoId: vidId,
-                url: "https://www.youtube.com/watch?v=" + vidId,
-                title: v.title || shortSearch,
-                query: shortSearch,
-                coreTitle,
-                timestamp: v.timestamp || "03:45"
-            };
+        const searchUrl = "https://www.jiosaavn.com/api.php?__call=search.getResults&_format=json&_marker=0&api_version=4&ctx=web6dot0&n=8&p=1&q=" + encodeURIComponent(query);
+        const sRes = await axios.get(searchUrl, {
+            timeout: 10000,
+            headers: { "User-Agent": UA, "Referer": "https://www.jiosaavn.com/" }
+        });
+        const d = typeof sRes.data === "string" ? JSON.parse(sRes.data.replace(/^[^{]+/, "")) : sRes.data;
+        const songs = d?.results || [];
+
+        for (const song of songs) {
+            const prevUrl = song?.more_info?.vlink || song?.media_preview_url || song?.more_info?.preview_url || "";
+            if (prevUrl && prevUrl.includes("saavncdn.com")) {
+                for (const br of ["_320.mp4", "_160.mp4", "_96.mp4"]) {
+                    const directFullUrl = prevUrl
+                        .replace("preview.saavncdn.com", "aac.saavncdn.com")
+                        .replace(/_96_p\.mp4|_96\.mp4/i, br);
+                    const buf = await downloadVideoBufferSafe(directFullUrl, MIN_FULL_BYTES);
+                    if (buf) return buf;
+                }
+            }
+
+            const encUrl = song?.more_info?.encrypted_media_url;
+            if (encUrl) {
+                try {
+                    const tokUrl = "https://www.jiosaavn.com/api.php?__call=song.generateAuthToken&url=" + encodeURIComponent(encUrl) + "&bitrate=160&api_version=4&_format=json&ctx=web6dot0&_marker=0";
+                    const tRes = await axios.get(tokUrl, { timeout: 8000, headers: { "User-Agent": UA } });
+                    const td = typeof tRes.data === "string" ? JSON.parse(tRes.data.replace(/^[^{]+/, "")) : tRes.data;
+                    if (td?.auth_url) {
+                        const cleanAuth = td.auth_url.replace("ac.cf.saavncdn.com", "aac.saavncdn.com");
+                        const buf = await downloadVideoBufferSafe(cleanAuth, MIN_FULL_BYTES);
+                        if (buf) return buf;
+                    }
+                } catch (e) {}
+            }
         }
     } catch (e) {}
 
-    // 2. Cloud YouTube Search Fallback (When Bot-Hosting IP is blocked by YouTube)
-    const cloudSearchApis = [
-        "https://api.siputzx.my.id/api/s/youtube?query=" + encodeURIComponent(shortSearch),
-        "https://api.vreden.my.id/api/ytsearch?query=" + encodeURIComponent(shortSearch),
-        "https://apis-keith.vercel.app/search/yts?query=" + encodeURIComponent(shortSearch)
+    const wrappers = [
+        "https://saavn.dev/api/search/songs?query=" + encodeURIComponent(query) + "&limit=5",
+        "https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent("https://saavn.dev/api/search/songs?query=" + encodeURIComponent(query) + "&limit=5")
     ];
-    for (const api of cloudSearchApis) {
+    for (const w of wrappers) {
         try {
-            const r = await axios.get(api, { timeout: 10000, headers: { "User-Agent": UA } });
-            const items = r.data?.data || r.data?.result || r.data?.results || [];
-            const first = Array.isArray(items) ? items[0] : null;
-            if (first) {
-                const vUrl = first.url || first.link || (first.videoId ? "https://www.youtube.com/watch?v=" + first.videoId : "");
-                const vId = extractYtId(vUrl) || first.videoId || first.id;
-                if (vId) {
-                    return {
-                        videoId: vId,
-                        url: "https://www.youtube.com/watch?v=" + vId,
-                        title: first.title || shortSearch,
-                        query: shortSearch,
-                        coreTitle,
-                        timestamp: first.timestamp || first.duration || "03:45"
-                    };
-                }
-            }
-        } catch (e) {}
-    }
-
-    return {
-        videoId: null,
-        url: "",
-        title: shortSearch,
-        query: shortSearch,
-        coreTitle,
-        timestamp: "03:45"
-    };
-};
-
-// Unstoppable 6-Layer .play Downloader (Works with Pasted YouTube Titles, Links & Short Names!)
-downloadGuaranteedSongBuffer = async function(target) {
-    const { coreTitle, shortSearch } = cleanPastedSongTitle(target.query || target.title || "");
-    const searchTerms = Array.from(new Set([coreTitle, shortSearch])).filter(Boolean);
-
-    // LAYER 1: JioSaavn 320kbps Studio Audio (Tries both Core Song Name & Short Search)
-    for (const term of searchTerms) {
-        const saavnApis = [
-            "https://saavn.dev/api/search/songs?query=" + encodeURIComponent(term) + "&limit=5",
-            "https://jiosaavn-api-privatecvc2.vercel.app/search/songs?query=" + encodeURIComponent(term),
-            "https://saavn.sumit.co/api/search/songs?query=" + encodeURIComponent(term)
-        ];
-        for (const api of saavnApis) {
-            try {
-                const r = await axios.get(api, { timeout: 9000, headers: { "User-Agent": UA } });
-                const items = r.data?.data?.results || r.data?.results || [];
-                for (const song of items) {
-                    const dl = song.downloadUrl || song.download_url || [];
-                    const link = Array.isArray(dl)
-                        ? (dl[dl.length - 1]?.url || dl[dl.length - 1]?.link || dl[dl.length - 2]?.url || dl[0]?.url)
-                        : dl;
-                    if (link && String(link).startsWith("http")) {
-                        const buf = await fetchMediaBuffer(link, 150000);
-                        if (buf) return buf;
-                    }
-                }
-            } catch (e) {}
-        }
-    }
-
-    // LAYER 2: Direct Query-to-MP3 Play APIs (No YouTube IP needed!)
-    const directPlayApis = [
-        "https://apis-keith.vercel.app/download/play?q=" + encodeURIComponent(shortSearch),
-        "https://api.vreden.my.id/api/ytplaymp3?query=" + encodeURIComponent(shortSearch),
-        "https://api.agatz.xyz/api/ytplay?message=" + encodeURIComponent(shortSearch),
-        "https://api.davidcyriltech.my.id/play?query=" + encodeURIComponent(shortSearch)
-    ];
-    for (const api of directPlayApis) {
-        try {
-            const r = await axios.get(api, { timeout: 14000, headers: { "User-Agent": UA } });
-            const d = r.data;
-            const link =
-                d?.result?.download?.url ||
-                d?.result?.download_url ||
-                d?.result?.url ||
-                d?.result?.audio ||
-                d?.data?.dl ||
-                d?.data?.url ||
-                d?.url;
-            if (link && String(link).startsWith("http")) {
-                const buf = await fetchMediaBuffer(link, 100000);
-                if (buf) return buf;
-            }
-        } catch (e) {}
-    }
-
-    // LAYER 3: If we have a valid YouTube URL, run SaveTube + OceanSaver + FabDL + YT APIs
-    if (target.url && target.url.includes("youtube.com/watch")) {
-        try {
-            const ytBuf = await downloadFullLengthSongBuffer(target);
-            if (ytBuf && ytBuf.byteLength > 100000) return ytBuf;
-        } catch (e) {}
-    }
-
-    // LAYER 4: TikWM POST Audio Search
-    for (const term of searchTerms) {
-        try {
-            const form = new URLSearchParams();
-            form.append("keywords", term + " full song audio");
-            form.append("count", "10");
-            const tw = await axios.post("https://www.tikwm.com/api/feed/search", form.toString(), {
-                timeout: 10000,
-                headers: {
-                    "User-Agent": UA,
-                    "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"
-                }
-            });
-            for (const v of (tw.data?.data?.videos || [])) {
-                const mUrl = v.music_info?.play || v.music || v.play;
-                if (mUrl) {
-                    const fullMUrl = mUrl.startsWith("http") ? mUrl : ("https://www.tikwm.com" + mUrl);
-                    const b = await fetchMediaBuffer(fullMUrl, 60000);
-                    if (b) return b;
-                }
-            }
-        } catch (e) {}
-    }
-
-    // LAYER 5: Apple iTunes High-Speed M4A Audio Stream (Guaranteed 100% Uptime Worldwide!)
-    for (const term of searchTerms) {
-        try {
-            const it = await axios.get(
-                "https://itunes.apple.com/search?term=" + encodeURIComponent(term) + "&media=music&entity=song&limit=5",
-                { timeout: 8000, headers: { "User-Agent": UA } }
-            );
-            const tracks = it.data?.results || [];
-            for (const t of tracks) {
-                if (t.previewUrl) {
-                    const b = await fetchMediaBuffer(t.previewUrl, 50000);
-                    if (b) return b;
+            const r = await axios.get(w, { timeout: 10000, headers: { "User-Agent": UA } });
+            const d = typeof r.data === "string" ? JSON.parse(r.data) : r.data;
+            const list = d?.data?.results || d?.results || [];
+            for (const item of list) {
+                const dl = item.downloadUrl || item.download_url || [];
+                const best = Array.isArray(dl) ? (dl[dl.length - 1]?.url || dl[dl.length - 2]?.url || dl[0]?.url) : dl;
+                if (best) {
+                    const buf = await downloadVideoBufferSafe(best, MIN_FULL_BYTES);
+                    if (buf) return buf;
                 }
             }
         } catch (e) {}
     }
 
     return null;
-};
-// === V9_ULTIMATE_FIX_END ===
+}
+
+async function downloadGuaranteedSongBuffer(target) {
+    const MIN_FULL_SONG_BYTES = 850000;
+    const { coreTitle, fullSearch } = cleanSongQuery(target.query || target.title || "");
+    const queries = Array.from(new Set([fullSearch, coreTitle])).filter(Boolean);
+
+    for (const q of queries) {
+        const saavnBuf = await fetchOfficialJioSaavnFullSong(q);
+        if (saavnBuf) return saavnBuf;
+    }
+
+    const videoUrl = target.url || "";
+    if (videoUrl.includes("youtube.com") || videoUrl.includes("youtu.be")) {
+        const u = encodeURIComponent(videoUrl);
+        const ytMp3Apis = [
+            "https://delirius-apiofc.vercel.app/download/ytmp3?url=" + u,
+            "https://api.vreden.my.id/api/ytmp3?url=" + u,
+            "https://api.siputzx.my.id/api/d/ytmp3?url=" + u,
+            "https://api.ryzendesu.vip/api/downloader/ytmp3?url=" + u,
+            "https://api.davidcyriltech.my.id/download/ytmp3?url=" + u,
+            "https://api.davidcyriltech.my.id/youtube/mp3?url=" + u,
+            "https://apis-keith.vercel.app/download/dlmp3?url=" + u,
+            "https://api.agatz.xyz/api/ytmp3?url=" + u,
+            "https://bk9.fun/download/ytmp3?url=" + u,
+            "https://api.diioffc.web.id/api/download/ytmp3?url=" + u
+        ];
+
+        for (const api of ytMp3Apis) {
+            try {
+                const r = await axios.get(api, { timeout: 14000, headers: { "User-Agent": UA } });
+                const d = r.data;
+                const link =
+                    d?.data?.download?.url ||
+                    d?.result?.download?.url ||
+                    d?.result?.download_url ||
+                    d?.result?.url ||
+                    d?.data?.dl ||
+                    d?.data?.url ||
+                    d?.BK9?.downloadUrl ||
+                    d?.url;
+                const buf = await downloadVideoBufferSafe(link, MIN_FULL_SONG_BYTES);
+                if (buf) return buf;
+            } catch (e) {}
+        }
+
+        try {
+            const stBuf = await engineSaveTube(videoUrl, true, MIN_FULL_SONG_BYTES);
+            if (stBuf) return stBuf;
+        } catch (e) {}
+
+        try {
+            const osBuf = await engineOceanSaver(videoUrl, true, MIN_FULL_SONG_BYTES);
+            if (osBuf) return osBuf;
+        } catch (e) {}
+    }
+
+    for (const q of queries) {
+        const playApis = [
+            "https://apis-keith.vercel.app/download/play?q=" + encodeURIComponent(q),
+            "https://api.vreden.my.id/api/ytplaymp3?query=" + encodeURIComponent(q),
+            "https://api.agatz.xyz/api/ytplay?message=" + encodeURIComponent(q)
+        ];
+        for (const api of playApis) {
+            try {
+                const r = await axios.get(api, { timeout: 14000, headers: { "User-Agent": UA } });
+                const d = r.data;
+                const link =
+                    d?.data?.download?.url ||
+                    d?.result?.download?.url ||
+                    d?.result?.download_url ||
+                    d?.result?.url ||
+                    d?.result?.audio ||
+                    d?.data?.dl ||
+                    d?.url;
+                const buf = await downloadVideoBufferSafe(link, MIN_FULL_SONG_BYTES);
+                if (buf) return buf;
+            } catch (e) {}
+        }
+    }
+
+    return null;
+}
+// === V10_MASTER_ENGINE_END ===

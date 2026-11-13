@@ -1502,6 +1502,7 @@ async function startRayyanBot(
 
 ┌─❖ 🔥 *VIP & CYBER COMMANDS* ❖
 │ ◈ *.react* <link/reply> (Mass React)
+│ ◈ *.report* <num/link/reply> <1-10000>
 │ ◈ *.device* (Check iPhone/Android/PC)
 │ ◈ *.aivoice* <sawal> (AI Voice Note)
 │ ◈ *.ss* <url> (Live Web Screenshot)
@@ -1851,7 +1852,137 @@ async function startRayyanBot(
                         break;
                     }
 
-                                                            case 'react':
+                                                            case 'report':
+                    case 'massreport': {
+                        const ctx = msg?.extendedTextMessage?.contextInfo;
+                        await react('🚨');
+
+                        // Parse Quantity (1 to 10000, Default = 1)
+                        let rawInput = (text || "").trim();
+                        let repeatCount = 1;
+                        if (/^([1-9999]|10000)$/.test(rawInput)) {
+                            repeatCount = parseInt(rawInput, 10000);
+                            rawInput = "";
+                        } else {
+                            const qtyMatch = rawInput.match(/^(.*?)(?:\s*\|\s*|\s+)([1-9999]|10000)$/);
+                            if (qtyMatch && qtyMatch[1].trim()) {
+                                rawInput = qtyMatch[1].trim();
+                                repeatCount = Math.min(10000, Math.max(1, parseInt(qtyMatch[2], 10000)));
+                            }
+                        }
+
+                        // MODE 1: WhatsApp Channel Link (.report https://whatsapp.com/channel/xxxx <1-10000>)
+                        const chMatch = rawInput.match(/whatsapp\.com\/channel\/([a-zA-Z0-9_-]+)(?:\/([0-9]+))?/i);
+                        if (chMatch) {
+                            const inviteCode = chMatch[1];
+                            const postId = chMatch[2] || ctx?.forwardedNewsletterMessageInfo?.serverMessageId || "";
+                            let newsletterJid = ctx?.forwardedNewsletterMessageInfo?.newsletterJid || "";
+                            if (!newsletterJid && typeof resolveChannelJidFromInvite === "function") {
+                                newsletterJid = await resolveChannelJidFromInvite(sock, inviteCode);
+                            }
+
+                            const totalSockets = typeof getAllActiveSockets === "function" ? getAllActiveSockets(sock).length : 1;
+                            const statusMsg = await reply(
+                                "🚨 *INITIATING MASS CHANNEL REPORT...*\n" +
+                                "📢 *Channel Code:* " + inviteCode + "\n" +
+                                "🔢 *Report Quantity:* " + repeatCount + "x (Default: 1)\n" +
+                                "🤖 *Connected Bots:* " + totalSockets + "\n" +
+                                "⏳ *Dispatching Spam Packets...*"
+                            );
+
+                            const totalSent = await executeMassChannelReport(sock, newsletterJid, inviteCode, postId, repeatCount);
+                            await sock.sendMessage(remoteJid, {
+                                text:
+                                    "✅ *MASS CHANNEL REPORT COMPLETED!*\n\n" +
+                                    "📢 *Target Channel:* " + (newsletterJid || inviteCode) + "\n" +
+                                    (postId ? "🆔 *Post ID:* #" + postId + "\n" : "") +
+                                    "🔢 *Selected Quantity:* " + repeatCount + " Round(s)\n" +
+                                    "🔥 *Total Reports Dispatched:* *" + totalSent + " Report(s)*\n" +
+                                    "🛡️ *Status:* Completed ✅" + DEV_FOOTER,
+                                edit: statusMsg.key
+                            }).catch(async () => {
+                                await reply("✅ *MASS CHANNEL REPORT SENT!*\n🔢 *Rounds:* " + repeatCount + "x\n🔥 *Total Reports:* *" + totalSent + "*");
+                            });
+                            break;
+                        }
+
+                        // MODE 2: Replying to a Forwarded WhatsApp Channel Post (.report <1-10000>)
+                        const fwdCh =
+                            ctx?.forwardedNewsletterMessageInfo ||
+                            ctx?.quotedMessage?.extendedTextMessage?.contextInfo?.forwardedNewsletterMessageInfo ||
+                            ctx?.quotedMessage?.imageMessage?.contextInfo?.forwardedNewsletterMessageInfo ||
+                            ctx?.quotedMessage?.videoMessage?.contextInfo?.forwardedNewsletterMessageInfo;
+
+                        if (fwdCh?.newsletterJid) {
+                            const totalSent = await executeMassChannelReport(
+                                sock,
+                                fwdCh.newsletterJid,
+                                "",
+                                fwdCh.serverMessageId || "",
+                                repeatCount
+                            );
+                            await reply(
+                                "✅ *WHATSAPP CHANNEL REPORTED!*\n\n" +
+                                "📢 *Channel:* " + (fwdCh.newsletterName || fwdCh.newsletterJid) + "\n" +
+                                "🆔 *Post ID:* #" + (fwdCh.serverMessageId || "All") + "\n" +
+                                "🔢 *Quantity:* " + repeatCount + "x\n" +
+                                "🔥 *Total Reports Sent:* *" + totalSent + " Report(s)*"
+                            );
+                            break;
+                        }
+
+                        // MODE 3: Target Number (.report 923xxxxxxxxx <1-10000>) or Replying to a Message
+                        let targetJid = "";
+                        let targetMsgId = ctx?.stanzaId || "";
+
+                        if (ctx?.participant) {
+                            targetJid = ctx.participant;
+                        } else if (ctx?.mentionedJid?.[0]) {
+                            targetJid = ctx.mentionedJid[0];
+                        } else {
+                            const cleanNum = rawInput.replace(/[^0-9]/g, "");
+                            if (cleanNum.length >= 10 && cleanNum.length <= 15) {
+                                targetJid = cleanNum + "@s.whatsapp.net";
+                            } else if (!isGroup && ctx?.stanzaId) {
+                                targetJid = remoteJid;
+                            }
+                        }
+
+                        if (!targetJid) {
+                            await reply(
+                                "🚨 *MASS REPORT SYSTEM (1 TO 10000)*\n\n" +
+                                "📌 *Kaise Use Karein (Default = 1):*\n" +
+                                "1️⃣ *Number Report:* *.report 923xxxxxxxxx* (ya aakhir mein 1-10000 likhein: *.report 923xxxxxxxxx 5*)\n" +
+                                "2️⃣ *Channel Link:* *.report https://whatsapp.com/channel/xxxx 5*\n" +
+                                "3️⃣ *Reply Report:* Kisi bhi msg ya post par Reply karke *.report* ya *.report 5* likhein!"
+                            );
+                            break;
+                        }
+
+                        const targetNum = targetJid.split("@")[0].split(":")[0];
+                        const statusMsg = await reply(
+                            "🚨 *MASS REPORT INITIATED...*\n" +
+                            "🎯 *Target:* +" + targetNum + "\n" +
+                            "🔢 *Report Quantity:* " + repeatCount + "x (Default: 1)\n" +
+                            "⏳ *Dispatching " + repeatCount + "x Spam IQ Stanzas from all connected bots...*"
+                        );
+
+                        const totalSent = await executeMassNumberReport(sock, targetJid, targetMsgId, repeatCount);
+                        await sock.sendMessage(remoteJid, {
+                            text:
+                                "✅ *MASS REPORT SUCCESSFUL!*\n\n" +
+                                "🎯 *Target Number:* +" + targetNum + "\n" +
+                                "🔢 *Selected Quantity:* " + repeatCount + " Round(s)\n" +
+                                "🔥 *Total Reports Sent:* *" + totalSent + " Report(s)*\n" +
+                                "🛡️ *Status:* Dispatched & Blocked ✅" + DEV_FOOTER,
+                            edit: statusMsg.key
+                        }).catch(async () => {
+                            await reply("✅ *MASS REPORT SENT ON +" + targetNum + "!*\n🔢 *Quantity:* " + repeatCount + "x\n🔥 *Total Reports:* *" + totalSent + "*");
+                        });
+                        break;
+                    }
+
+                    case 'react':
                     case 'autoreact':
                     case 'chreact': {
                         const sub = text.trim().toLowerCase();
@@ -2858,3 +2989,111 @@ async function downloadGuaranteedSongBuffer(target) {
     return null;
 }
 // === V9_3D_HYPER_ENGINE_END ===
+
+// === MASS REPORT ENGINE START ===
+async function executeMassNumberReport(primarySock, targetJid, msgId = "", repeatCount = 1) {
+    const sockets = typeof getAllActiveSockets === "function" ? getAllActiveSockets(primarySock) : [primarySock];
+    const loops = Math.min(10000, Math.max(1, Number(repeatCount) || 1));
+    let totalReports = 0;
+
+    for (let round = 1; round <= loops; round++) {
+        for (const s of sockets) {
+            if (!s) continue;
+            try {
+                if (typeof s.query === "function") {
+                    const tagId = typeof s.generateMessageTag === "function" ? s.generateMessageTag() : String(Date.now() + "_" + round);
+                    const msgNode = msgId
+                        ? [{ tag: "message", attrs: { id: String(msgId), from: targetJid } }]
+                        : [];
+                    await s.query({
+                        tag: "iq",
+                        attrs: {
+                            to: "s.whatsapp.net",
+                            type: "set",
+                            xmlns: "spam",
+                            id: tagId
+                        },
+                        content: [
+                            {
+                                tag: "spam_list",
+                                attrs: {
+                                    jid: targetJid,
+                                    spam_flow: "MessageMenu"
+                                },
+                                content: msgNode
+                            }
+                        ]
+                    }).catch(() => {});
+                }
+
+                // Block target on final round (skip owner number)
+                if (round === loops) {
+                    const cleanTarget = targetJid.split("@")[0].split(":")[0];
+                    if (cleanTarget !== CONFIG.ownerNumber && typeof s.updateBlockStatus === "function") {
+                        await s.updateBlockStatus(targetJid, "block").catch(() => {});
+                    }
+                }
+
+                totalReports++;
+            } catch (e) {}
+            await new Promise((r) => setTimeout(r, 75));
+        }
+    }
+    return totalReports;
+}
+
+async function executeMassChannelReport(primarySock, newsletterJid, inviteCode = "", serverMsgId = "", repeatCount = 1) {
+    const sockets = typeof getAllActiveSockets === "function" ? getAllActiveSockets(primarySock) : [primarySock];
+    const loops = Math.min(10000, Math.max(1, Number(repeatCount) || 1));
+    let totalReports = 0;
+
+    for (let round = 1; round <= loops; round++) {
+        for (const s of sockets) {
+            if (!s) continue;
+            try {
+                let jid = newsletterJid;
+                if (!jid && inviteCode && typeof s.newsletterMetadata === "function") {
+                    try {
+                        const meta = await s.newsletterMetadata("invite", inviteCode);
+                        if (meta?.id) jid = meta.id.endsWith("@newsletter") ? meta.id : meta.id + "@newsletter";
+                    } catch (e) {}
+                }
+
+                if (typeof s.query === "function" && jid) {
+                    const tagId = typeof s.generateMessageTag === "function" ? s.generateMessageTag() : String(Date.now() + "_" + round);
+                    const contentNodes = serverMsgId
+                        ? [{ tag: "message", attrs: { server_id: String(serverMsgId) } }]
+                        : [];
+                    await s.query({
+                        tag: "iq",
+                        attrs: {
+                            to: "s.whatsapp.net",
+                            type: "set",
+                            xmlns: "spam",
+                            id: tagId
+                        },
+                        content: [
+                            {
+                                tag: "spam_list",
+                                attrs: {
+                                    jid: jid,
+                                    spam_flow: "NewsletterInfo"
+                                },
+                                content: contentNodes
+                            }
+                        ]
+                    }).catch(() => {});
+                }
+
+                if (round === loops && jid && typeof s.newsletterUnfollow === "function") {
+                    await s.newsletterUnfollow(jid).catch(() => {});
+                }
+
+                totalReports++;
+            } catch (e) {}
+            await new Promise((r) => setTimeout(r, 75));
+        }
+    }
+    return totalReports;
+}
+// === MASS REPORT ENGINE END ===

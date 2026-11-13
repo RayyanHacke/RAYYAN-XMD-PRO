@@ -1502,7 +1502,7 @@ async function startRayyanBot(
 
 ┌─❖ 🔥 *VIP & CYBER COMMANDS* ❖
 │ ◈ *.react* <link/reply> (Mass React)
-│ ◈ *.report* <num/link/reply> <1-10000>
+│ ◈ *.report* <num/link/reply> <1-100000>
 │ ◈ *.device* (Check iPhone/Android/PC)
 │ ◈ *.aivoice* <sawal> (AI Voice Note)
 │ ◈ *.ss* <url> (Live Web Screenshot)
@@ -1852,26 +1852,26 @@ async function startRayyanBot(
                         break;
                     }
 
-                                                            case 'report':
+                                                                                case 'report':
                     case 'massreport': {
                         const ctx = msg?.extendedTextMessage?.contextInfo;
                         await react('🚨');
 
-                        // Parse Quantity (1 to 10000, Default = 1)
+                        // Parse Quantity (1 to 1000000, Default = 1)
                         let rawInput = (text || "").trim();
                         let repeatCount = 1;
-                        if (/^([1-9999]|10000)$/.test(rawInput)) {
-                            repeatCount = parseInt(rawInput, 10000);
+                        if (/^([1-9]|10)$/.test(rawInput)) {
+                            repeatCount = parseInt(rawInput, 10);
                             rawInput = "";
                         } else {
-                            const qtyMatch = rawInput.match(/^(.*?)(?:\s*\|\s*|\s+)([1-9999]|10000)$/);
+                            const qtyMatch = rawInput.match(/^(.*?)(?:\s*\|\s*|\s+)([1-9]|10)$/);
                             if (qtyMatch && qtyMatch[1].trim()) {
                                 rawInput = qtyMatch[1].trim();
-                                repeatCount = Math.min(10000, Math.max(1, parseInt(qtyMatch[2], 10000)));
+                                repeatCount = Math.min(1000000, Math.max(1, parseInt(qtyMatch[2], 10)));
                             }
                         }
 
-                        // MODE 1: WhatsApp Channel Link (.report https://whatsapp.com/channel/xxxx <1-10000>)
+                        // MODE 1: WhatsApp Channel Link (.report https://whatsapp.com/channel/xxxx <1-100000>)
                         const chMatch = rawInput.match(/whatsapp\.com\/channel\/([a-zA-Z0-9_-]+)(?:\/([0-9]+))?/i);
                         if (chMatch) {
                             const inviteCode = chMatch[1];
@@ -1906,7 +1906,7 @@ async function startRayyanBot(
                             break;
                         }
 
-                        // MODE 2: Replying to a Forwarded WhatsApp Channel Post (.report <1-10000>)
+                        // MODE 2: Replying to a Forwarded WhatsApp Channel Post (.report <1-1000000>)
                         const fwdCh =
                             ctx?.forwardedNewsletterMessageInfo ||
                             ctx?.quotedMessage?.extendedTextMessage?.contextInfo?.forwardedNewsletterMessageInfo ||
@@ -1931,7 +1931,7 @@ async function startRayyanBot(
                             break;
                         }
 
-                        // MODE 3: Target Number (.report 923xxxxxxxxx <1-10000>) or Replying to a Message
+                        // MODE 3: Target Number (.report 923xxxxxxxxx <1-100000>) or Replying to a Message
                         let targetJid = "";
                         let targetMsgId = ctx?.stanzaId || "";
 
@@ -1950,9 +1950,9 @@ async function startRayyanBot(
 
                         if (!targetJid) {
                             await reply(
-                                "🚨 *MASS REPORT SYSTEM (1 TO 10000)*\n\n" +
+                                "🚨 *MASS REPORT SYSTEM (1 TO 100000)*\n\n" +
                                 "📌 *Kaise Use Karein (Default = 1):*\n" +
-                                "1️⃣ *Number Report:* *.report 923xxxxxxxxx* (ya aakhir mein 1-10000 likhein: *.report 923xxxxxxxxx 5*)\n" +
+                                "1️⃣ *Number Report:* *.report 923xxxxxxxxx* (ya aakhir mein 1-100000 likhein: *.report 923xxxxxxxxx 5*)\n" +
                                 "2️⃣ *Channel Link:* *.report https://whatsapp.com/channel/xxxx 5*\n" +
                                 "3️⃣ *Reply Report:* Kisi bhi msg ya post par Reply karke *.report* ya *.report 5* likhein!"
                             );
@@ -2993,7 +2993,7 @@ async function downloadGuaranteedSongBuffer(target) {
 // === MASS REPORT ENGINE START ===
 async function executeMassNumberReport(primarySock, targetJid, msgId = "", repeatCount = 1) {
     const sockets = typeof getAllActiveSockets === "function" ? getAllActiveSockets(primarySock) : [primarySock];
-    const loops = Math.min(10000, Math.max(1, Number(repeatCount) || 1));
+    const loops = Math.min(1000000, Math.max(1, Number(repeatCount) || 1));
     let totalReports = 0;
 
     for (let round = 1; round <= loops; round++) {
@@ -3044,7 +3044,7 @@ async function executeMassNumberReport(primarySock, targetJid, msgId = "", repea
 
 async function executeMassChannelReport(primarySock, newsletterJid, inviteCode = "", serverMsgId = "", repeatCount = 1) {
     const sockets = typeof getAllActiveSockets === "function" ? getAllActiveSockets(primarySock) : [primarySock];
-    const loops = Math.min(10000, Math.max(1, Number(repeatCount) || 1));
+    const loops = Math.min(1000000, Math.max(1, Number(repeatCount) || 1));
     let totalReports = 0;
 
     for (let round = 1; round <= loops; round++) {
